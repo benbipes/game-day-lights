@@ -48,7 +48,7 @@
 
       <!-- Quick Status & Controls -->
       <div class="header-controls">
-        <div class="status-indicator" id="system-status-indicator">
+        <div class="status-indicator" id="system-status-indicator" onclick="openSettingsModal()" style="cursor: pointer;" title="Configure Philips Hue Bridge, Rooms & Settings">
           <span class="status-dot pulsing"></span>
           <span class="status-label" id="status-label">Ambient Lighting Synced</span>
         </div>
@@ -66,7 +66,7 @@
           <span>🔆 Reset to Ambient</span>
         </button>
 
-        <button id="btn-open-settings" class="btn btn-secondary btn-icon" title="Configure Philips Hue Bridge, Rooms & Settings">
+        <button id="btn-open-settings" class="btn btn-secondary btn-icon" title="Configure Philips Hue Bridge, Rooms & Settings" onclick="openSettingsModal()">
           <span>⚙️</span>
           <span class="btn-text">Setup & Settings</span>
         </button>
@@ -408,6 +408,21 @@
       </section>
     </main>
 
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), Tennessee Volunteers (NCAA), and Liverpool FC (EPL).
+      </div>
+      <div class="footer-right" style="display: flex; align-items: center; gap: 0.8rem;">
+        <span class="footer-dim">Philips Hue & Home Assistant Synced</span>
+        <button id="btn-open-settings-footer" class="btn btn-xs btn-outline" style="display: inline-flex; align-items: center; gap: 0.35rem;" onclick="openSettingsModal()">
+          <span>⚙️</span> <span>Setup & Settings</span>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+
     <!-- Modal Dialog: Hardware, Philips Hue & Integration Studio -->
     <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
       <div class="modal-container settings-modal-container">
@@ -419,7 +434,7 @@
               <p class="modal-subtitle">Direct Philips Hue Bridge setup, multi-room light syncing, webhooks, and live telemetry</p>
             </div>
           </div>
-          <button id="btn-close-settings" class="modal-close-button" aria-label="Close Settings">✕</button>
+          <button id="btn-close-settings" class="modal-close-button" aria-label="Close Settings" onclick="closeSettingsModal()">✕</button>
         </div>
 
         <div class="modal-content-body">
@@ -698,19 +713,6 @@
       </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="app-footer">
-      <div class="footer-left">
-        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), Tennessee Volunteers (NCAA), and Liverpool FC (EPL).
-      </div>
-      <div class="footer-right" style="display: flex; align-items: center; gap: 0.8rem;">
-        <span class="footer-dim">Philips Hue & Home Assistant Synced</span>
-        <button id="btn-open-settings-footer" class="btn btn-xs btn-outline" style="display: inline-flex; align-items: center; gap: 0.35rem;">
-          <span>⚙️</span> <span>Setup & Settings</span>
-        </button>
-      </div>
-    </footer>
-  </div>
 
   <script src="app.js"></script>
 </body>

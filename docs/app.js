@@ -677,6 +677,7 @@ const state = {
       celebrationDurationSeconds: 12
     }
   },
+  cachedHueRooms: [],
   logs: []
 };
 
@@ -1029,8 +1030,8 @@ function renderConfigForms() {
   const hueAlertEl = document.getElementById('hue-alert-strobe');
   if (hueAlertEl) hueAlertEl.checked = !!hue.useAlertStrobe;
 
-  if (typeof cachedHueRooms !== 'undefined' && cachedHueRooms && cachedHueRooms.length > 0) {
-    renderRoomsGrid(cachedHueRooms);
+  if (Array.isArray(state.cachedHueRooms) && state.cachedHueRooms.length > 0) {
+    renderRoomsGrid(state.cachedHueRooms);
   }
 
   const origin = window.location.origin || 'http://localhost:3300';
@@ -1657,6 +1658,187 @@ function initSse() {
   }
 }
 
+// ==========================================================================
+// Settings Modal & Hue Rooms Controller (Top-Level Scope)
+// ==========================================================================
+function openSettingsModal(targetTab = null) {
+  const settingsModal = document.getElementById('settings-modal');
+  if (!settingsModal) return;
+  settingsModal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+
+  if (targetTab) {
+    const tabBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+    if (tabBtn) tabBtn.click();
+  }
+
+  if (Array.isArray(state.cachedHueRooms) && state.cachedHueRooms.length === 0) {
+    if (state.config?.philipsHue?.bridgeIp && state.config?.philipsHue?.username) {
+      fetchHueRooms();
+    }
+  }
+}
+
+function closeSettingsModal() {
+  const settingsModal = document.getElementById('settings-modal');
+  if (!settingsModal) return;
+  settingsModal.classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function getCurrentlySelectedTargetIds() {
+  const rawInput = (document.getElementById('hue-target-id')?.value || '').trim();
+  if (rawInput) {
+    return [...new Set(rawInput.split(/[, ]+/).filter(Boolean))];
+  }
+  if (Array.isArray(state.config?.philipsHue?.targetIds) && state.config.philipsHue.targetIds.length > 0) {
+    return state.config.philipsHue.targetIds.map(String);
+  }
+  if (state.config?.philipsHue?.targetId) {
+    return [String(state.config.philipsHue.targetId)];
+  }
+  return ['1'];
+}
+
+function renderRoomsGrid(rooms) {
+  const grid = document.getElementById('hue-rooms-grid');
+  if (!grid) return;
+  if (!rooms || rooms.length === 0) {
+    grid.innerHTML = `
+      <div class="rooms-placeholder" style="grid-column: 1 / -1; padding: 0.8rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px;">
+        No rooms found. Check your Bridge IP and Username.
+      </div>
+    `;
+    grid.style.display = 'block';
+    return;
+  }
+
+  state.cachedHueRooms = rooms;
+  const selectedIds = getCurrentlySelectedTargetIds();
+
+  grid.innerHTML = rooms.map(r => {
+    const isSelected = selectedIds.includes(String(r.id));
+    const lightCount = Array.isArray(r.lights) ? r.lights.length : 0;
+    return `
+      <div class="hue-room-card ${isSelected ? 'selected' : ''}" data-room-id="${r.id}">
+        <input type="checkbox" class="hue-room-checkbox" value="${r.id}" ${isSelected ? 'checked' : ''}>
+        <div class="hue-room-details">
+          <span class="hue-room-title">${escapeHtml(r.name)}</span>
+          <span class="hue-room-meta">
+            <span>${escapeHtml(r.type || 'Room')}</span>
+            <span class="hue-room-badge">ID: ${r.id}</span>
+            ${lightCount > 0 ? `<span class="hue-room-badge">${lightCount} 💡</span>` : ''}
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  grid.style.display = 'grid';
+
+  // Add click listeners to cards and checkboxes
+  grid.querySelectorAll('.hue-room-card').forEach(card => {
+    card.addEventListener('click', async (e) => {
+      const checkbox = card.querySelector('.hue-room-checkbox');
+      if (e.target !== checkbox) {
+        checkbox.checked = !checkbox.checked;
+      }
+      card.classList.toggle('selected', checkbox.checked);
+
+      // Gather all selected IDs
+      const checkedCards = grid.querySelectorAll('.hue-room-checkbox:checked');
+      let newSelectedIds = Array.from(checkedCards).map(cb => cb.value);
+
+      const targetEl = document.getElementById('hue-target-id');
+      if (targetEl) {
+        targetEl.value = newSelectedIds.join(', ');
+      }
+
+      const typeEl = document.getElementById('hue-target-type');
+      if (typeEl) typeEl.value = 'group';
+
+      await saveConfig({
+        philipsHue: {
+          ...state.config.philipsHue,
+          targetType: 'group',
+          targetId: newSelectedIds.join(', '),
+          targetIds: newSelectedIds
+        }
+      });
+    });
+  });
+}
+
+function populateRoomsDropdown(rooms) {
+  renderRoomsGrid(rooms);
+}
+
+async function fetchHueRooms() {
+  const ipEl = document.getElementById('hue-ip');
+  const userEl = document.getElementById('hue-user');
+  const ip = (ipEl?.value || state.config.philipsHue?.bridgeIp || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  const username = (userEl?.value || state.config.philipsHue?.username || '').trim();
+  const btnFetchRooms = document.getElementById('btn-fetch-rooms');
+
+  if (!username) {
+    alert('Please enter or pair your Hue API App Key / Username first.');
+    return;
+  }
+
+  if (!isLocalEnvironment()) {
+    const userChoice = prompt(
+      `🌐 On GitHub Pages, web browsers block connecting directly to local Wi-Fi devices.\n\n` +
+      `Options to load your rooms:\n\n` +
+      `1. Open http://localhost:3300 in your browser (all rooms load automatically in 1 click!)\n\n` +
+      `2. Or in Terminal run:\ncurl -s http://${ip || '<IP>'}/api/${username}/groups\n\n` +
+      `Paste that command's JSON output below to load the dropdown right now:`
+    );
+    if (userChoice && userChoice.trim()) {
+      try {
+        const groups = JSON.parse(userChoice.trim());
+        const rooms = [];
+        if (typeof groups === 'object' && !groups.error) {
+          for (const [id, grp] of Object.entries(groups)) {
+            rooms.push({ id, name: grp.name, type: grp.type || 'Room', lights: grp.lights || [] });
+          }
+        }
+        if (rooms.length > 0) {
+          populateRoomsDropdown(rooms);
+          alert(`✅ Successfully loaded ${rooms.length} rooms!`);
+          return;
+        }
+      } catch (parseErr) {
+        alert('Could not parse JSON. You can also just type your room numbers directly into "Target ID" (e.g. 1, 81).');
+      }
+    }
+    return;
+  }
+
+  // Local Mac Server flow
+  if (btnFetchRooms) btnFetchRooms.textContent = '⏳ Loading...';
+  try {
+    const url = `/api/hue/rooms?bridgeIp=${encodeURIComponent(ip)}&username=${encodeURIComponent(username)}`;
+    const res = await safeFetchJson(url);
+    if (res.ok && res.data && res.data.rooms && res.data.rooms.length > 0) {
+      populateRoomsDropdown(res.data.rooms);
+      if (btnFetchRooms) btnFetchRooms.textContent = '✅ Loaded!';
+      setTimeout(() => { if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms'; }, 2500);
+    } else {
+      const msg = res.data?.error || res.error || 'Could not reach bridge';
+      alert(`Could not load rooms: ${msg}\nEnsure your Hue Bridge IP and Username are correct.`);
+      if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
+    }
+  } catch (e) {
+    if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
+  }
+}
+
+// Attach globally for inline HTML handlers & debugging
+window.openSettingsModal = openSettingsModal;
+window.closeSettingsModal = closeSettingsModal;
+window.renderRoomsGrid = renderRoomsGrid;
+window.fetchHueRooms = fetchHueRooms;
+
 // Event Listeners Setup
 function setupEventListeners() {
   // Team cards click
@@ -1731,6 +1913,7 @@ function setupEventListeners() {
   }
 
   // Simulator Controls
+  const btnSimScore = document.getElementById('btn-sim-score');
   if (btnSimScore) {
     btnSimScore.addEventListener('click', async () => {
       const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack' || state.activeTeam === 'vols';
@@ -1858,45 +2041,34 @@ function setupEventListeners() {
   const btnCloseSettings = document.getElementById('btn-close-settings');
   const statusIndicator = document.getElementById('system-status-indicator');
 
-  function openSettingsModal(targetTab = null) {
-    if (!settingsModal) return;
-    settingsModal.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-
-    if (targetTab) {
-      const tabBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
-      if (tabBtn) tabBtn.click();
-    }
-
-    if (typeof cachedHueRooms !== 'undefined' && cachedHueRooms.length === 0) {
-      if (state.config?.philipsHue?.bridgeIp && state.config?.philipsHue?.username) {
-        fetchHueRooms();
-      }
-    }
-  }
-
-  function closeSettingsModal() {
-    if (!settingsModal) return;
-    settingsModal.classList.add('hidden');
-    document.body.style.overflow = '';
-  }
-
   if (btnOpenSettings) {
-    btnOpenSettings.addEventListener('click', () => openSettingsModal());
+    btnOpenSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      openSettingsModal();
+    });
   }
 
   if (btnOpenSettingsFooter) {
-    btnOpenSettingsFooter.addEventListener('click', () => openSettingsModal());
+    btnOpenSettingsFooter.addEventListener('click', (e) => {
+      e.preventDefault();
+      openSettingsModal();
+    });
   }
 
   if (btnCloseSettings) {
-    btnCloseSettings.addEventListener('click', () => closeSettingsModal());
+    btnCloseSettings.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSettingsModal();
+    });
   }
 
   if (statusIndicator) {
     statusIndicator.style.cursor = 'pointer';
     statusIndicator.title = 'Click to open Setup & Settings';
-    statusIndicator.addEventListener('click', () => openSettingsModal());
+    statusIndicator.addEventListener('click', (e) => {
+      e.preventDefault();
+      openSettingsModal();
+    });
   }
 
   if (settingsModal) {
@@ -1932,7 +2104,7 @@ function setupEventListeners() {
         btn.classList.add('active');
         targetPanel.classList.add('active');
 
-        if (tabId === 'tab-philips-hue' && typeof cachedHueRooms !== 'undefined' && cachedHueRooms.length === 0) {
+        if (tabId === 'tab-philips-hue' && Array.isArray(state.cachedHueRooms) && state.cachedHueRooms.length === 0) {
           fetchHueRooms();
         }
       });
@@ -2170,159 +2342,7 @@ function setupEventListeners() {
     });
   }
 
-  let cachedHueRooms = [];
 
-  function getCurrentlySelectedTargetIds() {
-    const rawInput = (document.getElementById('hue-target-id')?.value || '').trim();
-    if (rawInput) {
-      return [...new Set(rawInput.split(/[, ]+/).filter(Boolean))];
-    }
-    if (Array.isArray(state.config?.philipsHue?.targetIds) && state.config.philipsHue.targetIds.length > 0) {
-      return state.config.philipsHue.targetIds.map(String);
-    }
-    if (state.config?.philipsHue?.targetId) {
-      return [String(state.config.philipsHue.targetId)];
-    }
-    return ['1'];
-  }
-
-  function renderRoomsGrid(rooms) {
-    const grid = document.getElementById('hue-rooms-grid');
-    if (!grid) return;
-    if (!rooms || rooms.length === 0) {
-      grid.innerHTML = `
-        <div class="rooms-placeholder" style="grid-column: 1 / -1; padding: 0.8rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px;">
-          No rooms found. Check your Bridge IP and Username.
-        </div>
-      `;
-      grid.style.display = 'block';
-      return;
-    }
-
-    cachedHueRooms = rooms;
-    const selectedIds = getCurrentlySelectedTargetIds();
-
-    grid.innerHTML = rooms.map(r => {
-      const isSelected = selectedIds.includes(String(r.id));
-      const lightCount = Array.isArray(r.lights) ? r.lights.length : 0;
-      return `
-        <div class="hue-room-card ${isSelected ? 'selected' : ''}" data-room-id="${r.id}">
-          <input type="checkbox" class="hue-room-checkbox" value="${r.id}" ${isSelected ? 'checked' : ''}>
-          <div class="hue-room-details">
-            <span class="hue-room-title">${escapeHtml(r.name)}</span>
-            <span class="hue-room-meta">
-              <span>${escapeHtml(r.type || 'Room')}</span>
-              <span class="hue-room-badge">ID: ${r.id}</span>
-              ${lightCount > 0 ? `<span class="hue-room-badge">${lightCount} 💡</span>` : ''}
-            </span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    grid.style.display = 'grid';
-
-    // Add click listeners to cards and checkboxes
-    grid.querySelectorAll('.hue-room-card').forEach(card => {
-      card.addEventListener('click', async (e) => {
-        const checkbox = card.querySelector('.hue-room-checkbox');
-        if (e.target !== checkbox) {
-          checkbox.checked = !checkbox.checked;
-        }
-        card.classList.toggle('selected', checkbox.checked);
-
-        // Gather all selected IDs
-        const checkedCards = grid.querySelectorAll('.hue-room-checkbox:checked');
-        let newSelectedIds = Array.from(checkedCards).map(cb => cb.value);
-        if (newSelectedIds.length === 0 && checkbox.checked === false) {
-          // Keep at least the clicked one if none selected or allow none
-        }
-
-        const targetEl = document.getElementById('hue-target-id');
-        if (targetEl) {
-          targetEl.value = newSelectedIds.join(', ');
-        }
-
-        const typeEl = document.getElementById('hue-target-type');
-        if (typeEl) typeEl.value = 'group';
-
-        await saveConfig({
-          philipsHue: {
-            ...state.config.philipsHue,
-            targetType: 'group',
-            targetId: newSelectedIds.join(', '),
-            targetIds: newSelectedIds
-          }
-        });
-      });
-    });
-  }
-
-  function populateRoomsDropdown(rooms) {
-    renderRoomsGrid(rooms);
-  }
-
-  // Fetch Rooms
-  async function fetchHueRooms() {
-    const ipEl = document.getElementById('hue-ip');
-    const userEl = document.getElementById('hue-user');
-    const ip = (ipEl?.value || state.config.philipsHue?.bridgeIp || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
-    const username = (userEl?.value || state.config.philipsHue?.username || '').trim();
-    const btnFetchRooms = document.getElementById('btn-fetch-rooms');
-
-    if (!username) {
-      alert('Please enter or pair your Hue API App Key / Username first.');
-      return;
-    }
-
-    if (!isLocalEnvironment()) {
-      // On GitHub Pages, browser security blocks direct LAN requests to the Hue bridge
-      const userChoice = prompt(
-        `🌐 On GitHub Pages, web browsers block connecting directly to local Wi-Fi devices.\n\n` +
-        `Options to load your rooms:\n\n` +
-        `1. Open http://localhost:3300 in your browser (all rooms load automatically in 1 click!)\n\n` +
-        `2. Or in Terminal run:\ncurl -s http://${ip || '<IP>'}/api/${username}/groups\n\n` +
-        `Paste that command's JSON output below to load the dropdown right now:`
-      );
-      if (userChoice && userChoice.trim()) {
-        try {
-          const groups = JSON.parse(userChoice.trim());
-          const rooms = [];
-          if (typeof groups === 'object' && !groups.error) {
-            for (const [id, grp] of Object.entries(groups)) {
-              rooms.push({ id, name: grp.name, type: grp.type || 'Room', lights: grp.lights || [] });
-            }
-          }
-          if (rooms.length > 0) {
-            populateRoomsDropdown(rooms);
-            alert(`✅ Successfully loaded ${rooms.length} rooms!`);
-            return;
-          }
-        } catch (parseErr) {
-          alert('Could not parse JSON. You can also just type your room numbers directly into "Target ID" (e.g. 1, 81).');
-        }
-      }
-      return;
-    }
-
-    // Local Mac Server flow
-    if (btnFetchRooms) btnFetchRooms.textContent = '⏳ Loading...';
-    try {
-      const url = `/api/hue/rooms?bridgeIp=${encodeURIComponent(ip)}&username=${encodeURIComponent(username)}`;
-      const res = await safeFetchJson(url);
-      if (res.ok && res.data && res.data.rooms && res.data.rooms.length > 0) {
-        populateRoomsDropdown(res.data.rooms);
-        if (btnFetchRooms) btnFetchRooms.textContent = '✅ Loaded!';
-        setTimeout(() => { if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms'; }, 2500);
-      } else {
-        const msg = res.data?.error || res.error || 'Could not reach bridge';
-        alert(`Could not load rooms: ${msg}\nEnsure your Hue Bridge IP and Username are correct.`);
-        if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
-      }
-    } catch (e) {
-      if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
-    }
-  }
 
   // Manual Target ID input synchronization
   const targetIdInput = document.getElementById('hue-target-id');

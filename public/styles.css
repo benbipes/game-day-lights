@@ -1503,19 +1503,21 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
   background: rgba(4, 6, 12, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   padding: 1.5rem;
-  opacity: 1;
-  visibility: visible;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
   transition: opacity 0.25s ease, visibility 0.25s ease;
 }
 
 .modal-backdrop.hidden {
+  display: none !important;
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
