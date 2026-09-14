@@ -372,6 +372,8 @@ const FALLBACK_TEAMS = {
     short: 'Canes',
     league: 'NHL',
     sport: 'Hockey',
+    espnId: '7',
+    sportPath: 'hockey/nhl',
     primaryColor: '#C8102E',
     secondaryColor: '#000000',
     accentColor: '#FFFFFF',
@@ -400,6 +402,8 @@ const FALLBACK_TEAMS = {
     short: 'Wolfpack',
     league: 'NCAA',
     sport: 'College Football',
+    espnId: '152',
+    sportPath: 'football/college-football',
     primaryColor: '#CC0000',
     secondaryColor: '#FFFFFF',
     accentColor: '#000000',
@@ -428,6 +432,8 @@ const FALLBACK_TEAMS = {
     short: 'Vikings',
     league: 'NFL',
     sport: 'Football',
+    espnId: '16',
+    sportPath: 'football/nfl',
     primaryColor: '#4F2683',
     secondaryColor: '#FFC62F',
     accentColor: '#FFFFFF',
@@ -456,6 +462,8 @@ const FALLBACK_TEAMS = {
     short: 'Liverpool',
     league: 'Premier League',
     sport: 'Soccer',
+    espnId: '364',
+    sportPath: 'soccer/eng.1',
     primaryColor: '#C8102E',
     secondaryColor: '#00B2A9',
     accentColor: '#F6EB61',
@@ -484,6 +492,8 @@ const FALLBACK_TEAMS = {
     short: 'Vols',
     league: 'NCAA',
     sport: 'College Football',
+    espnId: '2633',
+    sportPath: 'football/college-football',
     primaryColor: '#FF8200',
     secondaryColor: '#FFFFFF',
     accentColor: '#58595B',
@@ -525,6 +535,7 @@ const state = {
   isStandalone: false,
   sound: new SoundSynthesizer(),
   match: JSON.parse(JSON.stringify(FALLBACK_TEAMS.canes.defaultMatch)),
+  matches: {},
   config: {
     homeAssistant: {
       enabled: false,
@@ -573,7 +584,13 @@ function initElements() {
 
     // Scoreboard
     matchLeagueBadge: document.getElementById('match-league-badge'),
+    matchBroadcastBadge: document.getElementById('match-broadcast-badge'),
+    matchVenueBadge: document.getElementById('match-venue-badge'),
     matchPeriodClock: document.getElementById('match-period-clock'),
+    matchDateDisplay: document.getElementById('match-date-display'),
+    btnRefreshScores: document.getElementById('btn-refresh-scores'),
+    liveSourceIndicator: document.getElementById('live-source-indicator'),
+    liveSourceText: document.getElementById('live-source-text'),
     scoreTeamLogoWrap: document.getElementById('score-team-badge'),
     scoreTeamName: document.getElementById('score-team-name'),
     scoreTeamPts: document.getElementById('score-team-pts'),
@@ -949,6 +966,18 @@ function updateThemeColors() {
   }
 }
 
+// Helper: Format game date & time
+function formatGameDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' +
+           d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 // Render scoreboard
 function renderScoreboard() {
   const team = state.teams[state.activeTeam];
@@ -956,31 +985,184 @@ function renderScoreboard() {
   if (!team || !m) return;
 
   const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', liverpool: '⚽', vols: '🍊' };
-  const oppIcons = { 'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏', 'Manchester City': '⛵', 'Alabama Crimson Tide': '🐘' };
+  const oppIcons = {
+    'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏',
+    'Manchester City': '⛵', 'Alabama Crimson Tide': '🐘', 'Kennesaw State Owls': '🦉',
+    'Chicago Bears': '🐻', 'Vanderbilt Commodores': '⚓', 'Florida Panthers': '🐆',
+    'Newcastle United': '🏰'
+  };
 
   if (elements.matchLeagueBadge) elements.matchLeagueBadge.textContent = `${team.league} • ${team.sport.toUpperCase()}`;
-  if (elements.matchPeriodClock) elements.matchPeriodClock.textContent = `${m.period || ''} • ${m.clock || ''}`;
 
-  if (elements.scoreTeamLogoWrap) elements.scoreTeamLogoWrap.textContent = teamIcons[team.id] || '🏆';
+  // Game state styling & clock
+  const isLive = m.isLive || m.gameState === 'in' || m.status === 'LIVE';
+  const isFinal = m.gameState === 'post' || m.status === 'FINAL';
+  const isScheduled = !isLive && !isFinal;
+
+  if (elements.matchPeriodClock) {
+    if (isLive) {
+      elements.matchPeriodClock.innerHTML = `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;margin-right:5px;box-shadow:0 0 6px #ef4444;"></span>LIVE • ${m.period || ''} ${m.clock || ''}`;
+      elements.matchPeriodClock.style.background = 'rgba(239, 68, 68, 0.2)';
+      elements.matchPeriodClock.style.borderColor = '#ef4444';
+      elements.matchPeriodClock.style.color = '#fca5a5';
+    } else if (isFinal) {
+      elements.matchPeriodClock.textContent = `FINAL (${m.period || 'Final'})`;
+      elements.matchPeriodClock.style.background = 'rgba(100, 116, 139, 0.2)';
+      elements.matchPeriodClock.style.borderColor = 'rgba(148, 163, 184, 0.4)';
+      elements.matchPeriodClock.style.color = '#cbd5e1';
+    } else {
+      elements.matchPeriodClock.textContent = m.statusDetail || 'Upcoming';
+      elements.matchPeriodClock.style.background = 'rgba(245, 158, 11, 0.15)';
+      elements.matchPeriodClock.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+      elements.matchPeriodClock.style.color = '#fde68a';
+    }
+  }
+
+  // Date Display
+  if (elements.matchDateDisplay) {
+    if (isLive) {
+      elements.matchDateDisplay.textContent = '🔥 Game In Progress Right Now';
+      elements.matchDateDisplay.style.color = '#f87171';
+    } else if (isFinal) {
+      elements.matchDateDisplay.textContent = `🏁 Final Score • ${m.gameDate ? formatGameDate(m.gameDate) : 'Completed'}`;
+      elements.matchDateDisplay.style.color = '#94a3b8';
+    } else if (m.gameDate) {
+      elements.matchDateDisplay.textContent = `🗓️ Kickoff: ${formatGameDate(m.gameDate)}`;
+      elements.matchDateDisplay.style.color = '#fbbf24';
+    } else {
+      elements.matchDateDisplay.textContent = '🗓️ Upcoming Game';
+      elements.matchDateDisplay.style.color = '#fbbf24';
+    }
+  }
+
+  // TV Broadcast badge
+  if (elements.matchBroadcastBadge) {
+    if (m.broadcast && m.broadcast !== 'TBD') {
+      elements.matchBroadcastBadge.textContent = `📺 ${m.broadcast}`;
+      elements.matchBroadcastBadge.style.display = 'inline-block';
+    } else {
+      elements.matchBroadcastBadge.style.display = 'none';
+    }
+  }
+
+  // Venue badge
+  if (elements.matchVenueBadge) {
+    if (m.venue && m.venue !== 'TBD') {
+      elements.matchVenueBadge.textContent = `🏟️ ${m.venue}`;
+      elements.matchVenueBadge.style.display = 'inline-block';
+    } else {
+      elements.matchVenueBadge.style.display = 'none';
+    }
+  }
+
+  // Source indicator text
+  if (elements.liveSourceText) {
+    const timeStr = m.lastUpdated ? new Date(m.lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    elements.liveSourceText.textContent = `${m.source || 'ESPN Live Feed'}${timeStr ? ' · ' + timeStr : ''}`;
+  }
+
+  // Home / Away indicator tags
+  const homeTag = document.querySelector('.home-side .score-team-tag');
+  const awayTag = document.querySelector('.away-side .score-team-tag');
+  if (homeTag && awayTag) {
+    if (m.homeAway === 'away') {
+      homeTag.textContent = 'AWAY';
+      awayTag.textContent = 'HOME';
+    } else {
+      homeTag.textContent = 'HOME';
+      awayTag.textContent = 'AWAY';
+    }
+  }
+
+  // Team details
+  if (elements.scoreTeamLogoWrap) {
+    if (m.teamLogo) {
+      elements.scoreTeamLogoWrap.innerHTML = `<img src="${m.teamLogo}" alt="${team.name}" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;">`;
+    } else {
+      elements.scoreTeamLogoWrap.textContent = teamIcons[team.id] || '🏆';
+    }
+  }
   if (elements.scoreTeamName) elements.scoreTeamName.textContent = team.name;
-  if (elements.scoreTeamPts) elements.scoreTeamPts.textContent = m.scoreTeam ?? 0;
+
+  // Score display: For scheduled games with 0-0, display '-' unless user simulated score
+  if (elements.scoreTeamPts) {
+    if (isScheduled && m.scoreTeam === 0 && m.scoreOpponent === 0) {
+      elements.scoreTeamPts.textContent = '-';
+    } else {
+      elements.scoreTeamPts.textContent = m.scoreTeam ?? 0;
+    }
+  }
 
   if (elements.scoreOpponentName) elements.scoreOpponentName.textContent = m.opponent || 'Opponent';
-  if (elements.scoreOpponentPts) elements.scoreOpponentPts.textContent = m.scoreOpponent ?? 0;
+  if (elements.scoreOpponentPts) {
+    if (isScheduled && m.scoreTeam === 0 && m.scoreOpponent === 0) {
+      elements.scoreOpponentPts.textContent = '-';
+    } else {
+      elements.scoreOpponentPts.textContent = m.scoreOpponent ?? 0;
+    }
+  }
 
   const oppBadge = document.getElementById('score-opponent-badge');
-  if (oppBadge) oppBadge.textContent = oppIcons[m.opponent] || '🛡️';
+  if (oppBadge) {
+    if (m.opponentLogo) {
+      oppBadge.innerHTML = `<img src="${m.opponentLogo}" alt="${m.opponent}" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;">`;
+    } else {
+      oppBadge.textContent = oppIcons[m.opponent] || '🛡️';
+    }
+  }
 
   if (elements.matchLastEvent) elements.matchLastEvent.textContent = m.lastEvent || 'Game in progress';
 
   if (elements.screenTeamIcon) elements.screenTeamIcon.textContent = teamIcons[team.id] || '🏆';
   if (elements.screenMatchupText) elements.screenMatchupText.textContent = `${team.short.toUpperCase()} VS ${m.opponentShort || 'OPP'}`;
-  if (elements.screenClockText) elements.screenClockText.textContent = `${m.period || ''} ${m.clock || ''}`;
+  if (elements.screenClockText) {
+    if (isLive) {
+      elements.screenClockText.textContent = `${m.period || ''} ${m.clock || ''}`;
+    } else if (isFinal) {
+      elements.screenClockText.textContent = 'FINAL';
+    } else {
+      elements.screenClockText.textContent = m.period || 'Upcoming';
+    }
+  }
 
   if (elements.btnSimScoreText) {
     const isFootball = team.id === 'vikings' || team.id === 'wolfpack' || team.id === 'vols';
     elements.btnSimScoreText.textContent = isFootball ? '+ Touchdown (+6)' : '+ Goal (+1)';
   }
+}
+
+// Dynamically update team selector cards with real dates & opponents
+function updateTeamCardsSchedule() {
+  Object.keys(state.teams).forEach(teamId => {
+    const card = document.getElementById(`card-${teamId}`);
+    if (!card) return;
+
+    const oppEl = card.querySelector('.match-opponent-text');
+    if (!oppEl) return;
+
+    const m = state.matches[teamId];
+    if (!m) return;
+
+    const prefix = m.homeAway === 'away' ? 'at' : 'vs';
+    const opp = m.opponentShort || m.opponent || 'Opponent';
+
+    if (m.isLive || m.gameState === 'in' || m.status === 'LIVE') {
+      oppEl.innerHTML = `<span style="color:#ef4444;font-weight:700;">🔴 LIVE:</span> ${prefix} ${opp} (${m.scoreTeam}-${m.scoreOpponent})`;
+    } else if (m.gameState === 'post' || m.status === 'FINAL') {
+      oppEl.textContent = `Final: ${prefix} ${opp} (${m.scoreTeam}-${m.scoreOpponent})`;
+    } else if (m.gameDate) {
+      try {
+        const d = new Date(m.gameDate);
+        const dayStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
+        const timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        oppEl.textContent = `${dayStr} · ${prefix} ${opp} (${timeStr})`;
+      } catch (e) {
+        oppEl.textContent = `${prefix} ${opp}`;
+      }
+    } else {
+      oppEl.textContent = `${prefix} ${opp}`;
+    }
+  });
 }
 
 // Highlight Active Team Card
@@ -1099,7 +1281,9 @@ async function selectTeam(teamId) {
   const team = state.teams[teamId];
   if (team) {
     state.currentRgb = team.ambientRgb;
-    if (state.isStandalone || !state.match || state.match.teamId !== teamId) {
+    if (state.matches && state.matches[teamId]) {
+      state.match = state.matches[teamId];
+    } else if (state.isStandalone || !state.match || state.match.teamId !== teamId) {
       state.match = JSON.parse(JSON.stringify(team.defaultMatch));
     }
   }
@@ -1120,13 +1304,28 @@ async function selectTeam(teamId) {
       const data = await res.json();
       if (data.success && data.match) {
         state.match = data.match;
+        state.matches[teamId] = data.match;
         renderScoreboard();
+        updateTeamCardsSchedule();
       }
     } catch (err) {
       state.isStandalone = true;
     }
   } else {
     state.isStandalone = true;
+    // On standalone / GitHub Pages, fetch ESPN schedule directly if not yet cached
+    if (!state.matches || !state.matches[teamId] || state.matches[teamId].source !== 'ESPN Live Sports') {
+      fetchEspnDirectForTeam(teamId).then(m => {
+        if (m) {
+          state.matches[teamId] = m;
+          if (state.activeTeam === teamId) {
+            state.match = m;
+            renderScoreboard();
+          }
+          updateTeamCardsSchedule();
+        }
+      });
+    }
   }
 }
 
@@ -1151,6 +1350,13 @@ function initSse() {
         state.mode = data.mode;
         state.isCelebrating = data.isCelebrating;
         state.match = data.match;
+        if (data.matches) {
+          state.matches = data.matches;
+          if (state.matches[state.activeTeam]) {
+            state.match = state.matches[state.activeTeam];
+          }
+          updateTeamCardsSchedule();
+        }
         if (data.config) {
           const localHue = state.config.philipsHue || {};
           const serverHue = data.config.philipsHue || {};
@@ -1183,6 +1389,20 @@ function initSse() {
         renderConfigForms();
         fetchHaYaml();
         highlightActiveTeamCard(state.activeTeam);
+      } catch (err) {}
+    });
+
+    evtSource.addEventListener('matches_update', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.matches) {
+          state.matches = data.matches;
+          if (state.matches[state.activeTeam]) {
+            state.match = state.matches[state.activeTeam];
+          }
+          renderScoreboard();
+          updateTeamCardsSchedule();
+        }
       } catch (err) {}
     });
 
@@ -1306,6 +1526,13 @@ function setupEventListeners() {
       } catch (err) {
         runLocalAmbient(state.activeTeam);
       }
+    });
+  }
+
+  // Refresh Live Scores from ESPN
+  if (elements.btnRefreshScores) {
+    elements.btnRefreshScores.addEventListener('click', () => {
+      fetchLiveSports(true);
     });
   }
 
@@ -1902,6 +2129,164 @@ async function loadTeams() {
   }
 }
 
+// Client-side ESPN parser for GitHub Pages or remote standalone operation
+async function fetchEspnDirectForTeam(teamId) {
+  const team = state.teams[teamId];
+  if (!team || !team.sportPath || !team.espnId) return null;
+
+  try {
+    const schedUrl = `https://site.api.espn.com/apis/site/v2/sports/${team.sportPath}/teams/${team.espnId}/schedule`;
+    const res = await fetch(schedUrl);
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const events = data.events || [];
+    if (events.length === 0) return null;
+
+    // Prioritize: 1. In-progress ('in'), 2. Next upcoming ('pre'), 3. Most recent completed ('post')
+    let event = events.find(e => e.competitions?.[0]?.status?.type?.state === 'in');
+    if (!event) {
+      event = events.find(e => e.competitions?.[0]?.status?.type?.state === 'pre');
+    }
+    if (!event) {
+      const completed = events.filter(e => e.competitions?.[0]?.status?.type?.state === 'post');
+      if (completed.length > 0) event = completed[completed.length - 1];
+    }
+    if (!event) return null;
+
+    const comp = event.competitions?.[0] || {};
+    const compState = comp.status?.type?.state || 'pre';
+    const isLive = compState === 'in';
+
+    const teamComp = comp.competitors?.find(c =>
+      String(c.team?.id) === String(team.espnId) ||
+      (c.team?.displayName && c.team.displayName.toLowerCase().includes(team.short.toLowerCase()))
+    ) || comp.competitors?.[0];
+    const oppComp = comp.competitors?.find(c => c !== teamComp) || comp.competitors?.[1];
+
+    const homeAway = teamComp?.homeAway || 'home';
+    const statusType = isLive ? 'LIVE' : (compState === 'post' ? 'FINAL' : 'SCHEDULED');
+    const rawScoreTeam = teamComp?.score?.value ?? (teamComp?.score?.displayValue ? parseInt(teamComp.score.displayValue, 10) : null);
+    const rawScoreOpp = oppComp?.score?.value ?? (oppComp?.score?.displayValue ? parseInt(oppComp.score.displayValue, 10) : null);
+
+    const venueName = comp.venue?.fullName || 'TBD';
+    const venueCity = comp.venue?.address?.city ? ` (${comp.venue.address.city})` : '';
+    const venue = `${venueName}${venueCity}`;
+
+    const broadcast = comp.broadcasts?.[0]?.media?.shortName ||
+                      comp.broadcasts?.[0]?.names?.[0] ||
+                      'TBD';
+
+    const detail = comp.status?.type?.detail || comp.status?.type?.description || 'Upcoming';
+    let period = 'Upcoming';
+    let clock = 'Pregame';
+
+    if (isLive) {
+      period = comp.status?.period ? (team.sport.includes('Football') ? `Q${comp.status.period}` : `Period ${comp.status.period}`) : 'Live';
+      clock = comp.status?.displayClock || 'Live';
+    } else if (compState === 'post') {
+      period = 'Final';
+      clock = 'Final';
+    } else {
+      period = 'Upcoming';
+      clock = detail;
+    }
+
+    let lastEventText = '';
+    if (isLive) {
+      lastEventText = comp.situation?.lastPlay?.text || `LIVE: ${team.short} ${rawScoreTeam ?? 0} - ${rawScoreOpp ?? 0} ${oppComp?.team?.abbreviation || 'OPP'}`;
+    } else if (compState === 'post') {
+      lastEventText = `FINAL: ${teamComp?.team?.shortDisplayName || team.short} ${rawScoreTeam ?? 0}, ${oppComp?.team?.shortDisplayName || 'OPP'} ${rawScoreOpp ?? 0}`;
+    } else {
+      lastEventText = `Upcoming Matchup: ${event.name} • ${detail}`;
+    }
+
+    const matchObj = {
+      teamId,
+      teamName: team.name,
+      teamShort: team.short,
+      sport: team.sport,
+      league: team.league,
+      status: statusType,
+      gameState: compState,
+      statusDetail: detail,
+      period,
+      clock,
+      gameDate: event.date || null,
+      opponent: oppComp?.team?.displayName || team.defaultMatch.opponent,
+      opponentShort: oppComp?.team?.abbreviation || oppComp?.team?.shortDisplayName || team.defaultMatch.opponentShort,
+      opponentLogo: oppComp?.team?.logo || '',
+      teamLogo: teamComp?.team?.logo || '',
+      homeAway,
+      scoreTeam: rawScoreTeam ?? 0,
+      scoreOpponent: rawScoreOpp ?? 0,
+      venue,
+      broadcast,
+      lastEvent: lastEventText,
+      isLive,
+      source: 'ESPN Live Sports',
+      lastUpdated: new Date().toISOString()
+    };
+
+    return matchObj;
+  } catch (err) {
+    return null;
+  }
+}
+
+// Unified Live Sports Fetcher (Works locally via backend or standalone via direct ESPN API)
+async function fetchLiveSports(force = false) {
+  if (elements.btnRefreshScores) {
+    elements.btnRefreshScores.classList.add('spinning');
+  }
+
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  let fetchedFromServer = false;
+
+  if (isHttp && isLocalEnvironment()) {
+    try {
+      const endpoint = force ? '/api/matches/refresh' : '/api/matches';
+      const method = force ? 'POST' : 'GET';
+      const res = await fetch(endpoint, { method });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.matches) {
+          state.matches = data.matches;
+          if (state.matches[state.activeTeam]) {
+            state.match = state.matches[state.activeTeam];
+          }
+          fetchedFromServer = true;
+        }
+      }
+    } catch (err) {
+      fetchedFromServer = false;
+    }
+  }
+
+  // If not on local server or server query failed (e.g. GitHub Pages), query ESPN directly
+  if (!fetchedFromServer) {
+    const promises = Object.keys(state.teams).map(async (teamId) => {
+      const match = await fetchEspnDirectForTeam(teamId);
+      if (match) {
+        state.matches[teamId] = match;
+        if (state.activeTeam === teamId) {
+          state.match = match;
+        }
+      }
+    });
+    await Promise.allSettled(promises);
+  }
+
+  renderScoreboard();
+  updateTeamCardsSchedule();
+
+  if (elements.btnRefreshScores) {
+    setTimeout(() => {
+      elements.btnRefreshScores.classList.remove('spinning');
+    }, 450);
+  }
+}
+
 // Initialize Application
 function initApp() {
   loadSavedConfig();
@@ -1920,6 +2305,12 @@ function initApp() {
   loadTeams();
   syncServerConfig();
   initSse();
+  fetchLiveSports(false);
+
+  // Background auto-refresh of live sports every 30 seconds
+  setInterval(() => {
+    fetchLiveSports(false);
+  }, 30000);
 
   // Show local server guidance banner if viewing on GitHub Pages / remote HTTPS
   if (!isLocalEnvironment()) {
@@ -1933,3 +2324,4 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+

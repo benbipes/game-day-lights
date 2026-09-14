@@ -218,8 +218,24 @@
         <!-- Live Scoreboard -->
         <div class="scoreboard-card">
           <div class="scoreboard-header">
-            <div class="match-badge" id="match-league-badge">NHL • GAME DAY LIVE</div>
-            <div class="game-period-pill" id="match-period-clock">3rd Period • 04:12</div>
+            <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+              <div class="match-badge" id="match-league-badge">NHL • GAME DAY LIVE</div>
+              <div class="match-badge" id="match-broadcast-badge" style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); display: none;">📺 TV</div>
+              <div class="match-badge" id="match-venue-badge" style="background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); font-size: 0.75rem; display: none;">🏟️ Venue</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.4rem;">
+              <div class="game-period-pill" id="match-period-clock">3rd Period • 04:12</div>
+              <button id="btn-refresh-scores" class="btn btn-xs btn-ghost" title="Refresh Live Scores from ESPN" style="padding: 0.2rem 0.45rem; font-size: 0.75rem;">🔄</button>
+            </div>
+          </div>
+
+          <!-- Live Feed Status Bar -->
+          <div id="scoreboard-status-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0.75rem; background: rgba(0,0,0,0.3); border-radius: 6px; margin: 0.4rem 0 0.8rem 0; font-size: 0.78rem;">
+            <div style="display: flex; align-items: center; gap: 0.4rem; color: #94a3b8;">
+              <span id="live-source-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4ade80;"></span>
+              <span id="live-source-text">ESPN / Yahoo Sports Live Feed</span>
+            </div>
+            <div id="match-date-display" style="color: #fbbf24; font-weight: 500;">Upcoming Game</div>
           </div>
 
           <div class="scoreboard-main">

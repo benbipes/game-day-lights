@@ -164,4 +164,6 @@ const latestLog = lightService.logs[0];
 assert.ok(latestLog.timestamp && latestLog.source && latestLog.type, 'Log entries have valid telemetry structure');
 console.log(`  ✅ Activity logs recorded ${lightService.logs.length} telemetry events`);
 
+espnService.stopPolling();
+
 console.log('\n🎉 ALL TESTS PASSED! Game Day Lights core engine is verified and ready.\n');

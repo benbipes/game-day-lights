@@ -8,6 +8,9 @@ export const TEAMS = {
     league: 'NHL',
     sport: 'Hockey',
     location: 'Raleigh, NC',
+    espnId: '7',
+    sportPath: 'hockey/nhl',
+    yahooLeague: 'nhl',
     primaryColor: '#C8102E', // Canes Storm Red
     secondaryColor: '#000000', // Black
     accentColor: '#FFFFFF', // Ice White
@@ -48,6 +51,9 @@ export const TEAMS = {
     league: 'NCAA',
     sport: 'College Football',
     location: 'Raleigh, NC',
+    espnId: '152',
+    sportPath: 'football/college-football',
+    yahooLeague: 'ncaaf',
     primaryColor: '#CC0000', // Wolfpack Red
     secondaryColor: '#FFFFFF', // Clean White
     accentColor: '#000000', // Black
@@ -88,6 +94,9 @@ export const TEAMS = {
     league: 'NFL',
     sport: 'Football',
     location: 'Minneapolis, MN',
+    espnId: '16',
+    sportPath: 'football/nfl',
+    yahooLeague: 'nfl',
     primaryColor: '#4F2683', // Vikings Royal Purple
     secondaryColor: '#FFC62F', // Vikings Gold
     accentColor: '#FFFFFF', // White
@@ -128,6 +137,9 @@ export const TEAMS = {
     league: 'Premier League',
     sport: 'Soccer',
     location: 'Liverpool, UK',
+    espnId: '364',
+    sportPath: 'soccer/eng.1',
+    yahooLeague: 'soc',
     primaryColor: '#C8102E', // Anfield Red
     secondaryColor: '#00B2A9', // Teal
     accentColor: '#F6EB61', // Gold
@@ -168,6 +180,9 @@ export const TEAMS = {
     league: 'NCAA',
     sport: 'College Football',
     location: 'Knoxville, TN',
+    espnId: '2633',
+    sportPath: 'football/college-football',
+    yahooLeague: 'ncaaf',
     primaryColor: '#FF8200', // Tennessee Pantone 151 Orange
     secondaryColor: '#FFFFFF', // White
     accentColor: '#58595B', // Smokey Gray

@@ -77,6 +77,14 @@ lightService.onStateChange((state) => {
   });
 });
 
+// Broadcast real ESPN schedule and score updates
+espnService.onMatchesUpdate = (matches) => {
+  broadcastSse('matches_update', {
+    matches,
+    activeMatch: espnService.getMatch(lightService.currentTeamId)
+  });
+};
+
 // Helper: parse request JSON body
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -268,6 +276,21 @@ const server = http.createServer(async (req, res) => {
       matches: espnService.getAllMatches(),
       logs: lightService.logs.slice(0, 50)
     });
+  }
+
+  // GET /api/matches
+  if (pathname === '/api/matches' && req.method === 'GET') {
+    return sendJson(res, 200, { success: true, matches: espnService.getAllMatches() });
+  }
+
+  // POST or GET /api/matches/refresh
+  if (pathname === '/api/matches/refresh' && (req.method === 'POST' || req.method === 'GET')) {
+    try {
+      const matches = await espnService.refreshAllGames();
+      return sendJson(res, 200, { success: true, matches });
+    } catch (err) {
+      return sendJson(res, 500, { success: false, error: err.message });
+    }
   }
 
   // POST /api/select-team
