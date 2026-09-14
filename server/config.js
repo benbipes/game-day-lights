@@ -177,8 +177,8 @@ export const DEFAULT_USER_CONFIG = {
   // Philips Hue direct configuration
   philipsHue: {
     enabled: true,
-    bridgeIp: '192.168.1.50',
-    username: 'hue_api_username_or_token',
+    bridgeIp: '',
+    username: '',
     targetType: 'group', // 'group' or 'light'
     targetId: '1', // group id 1 or light id 1
     useAlertStrobe: true

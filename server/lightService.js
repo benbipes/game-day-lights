@@ -153,6 +153,9 @@ export class LightService {
     if (!hue || !hue.enabled) return { skipped: true, reason: 'Disabled' };
 
     const cleanIp = (hue.bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (!cleanIp || !hue.username) {
+      return { skipped: true, reason: 'Hue Bridge IP or username not configured' };
+    }
     const endpoint = hue.targetType === 'group'
       ? `http://${cleanIp}/api/${hue.username}/groups/${hue.targetId}/action`
       : `http://${cleanIp}/api/${hue.username}/lights/${hue.targetId}/state`;

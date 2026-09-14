@@ -398,7 +398,10 @@ const server = http.createServer(async (req, res) => {
       const bridgeIp = body.bridgeIp || userConfig.philipsHue.bridgeIp;
       const result = await lightService.pairHueBridge(bridgeIp);
       if (result.success) {
+        userConfig.philipsHue.bridgeIp = result.bridgeIp;
+        userConfig.philipsHue.username = result.username;
         saveConfigToFile(userConfig);
+        broadcastSse('config_update', { config: userConfig });
       }
       return sendJson(res, 200, result);
     } catch (err) {

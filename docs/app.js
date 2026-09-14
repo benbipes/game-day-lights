@@ -389,6 +389,13 @@ const FALLBACK_TEAMS = {
   }
 };
 
+// LocalStorage Persistence Keys
+const STORAGE_KEYS = {
+  CONFIG: 'game_day_lights_config_v1',
+  ACTIVE_TEAM: 'game_day_lights_active_team',
+  SOUND: 'game_day_lights_sound_enabled'
+};
+
 // Application State
 const state = {
   teams: FALLBACK_TEAMS,
@@ -405,12 +412,13 @@ const state = {
       mode: 'webhook',
       host: 'http://homeassistant.local:8123',
       webhookId: 'game_day_score_celebration',
-      entityId: 'light.living_room_lights'
+      entityId: 'light.living_room_lights',
+      accessToken: ''
     },
     philipsHue: {
       enabled: true,
-      bridgeIp: '192.168.1.50',
-      username: 'hue_api_key',
+      bridgeIp: '',
+      username: '',
       targetType: 'group',
       targetId: '1',
       useAlertStrobe: true
@@ -562,6 +570,123 @@ async function fetchHaYaml() {
   }
 }
 
+// LocalStorage Persistence & Config Management
+function loadSavedConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CONFIG);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        state.config = {
+          ...state.config,
+          ...parsed,
+          homeAssistant: { ...state.config.homeAssistant, ...(parsed.homeAssistant || {}) },
+          philipsHue: { ...state.config.philipsHue, ...(parsed.philipsHue || {}) },
+          general: { ...state.config.general, ...(parsed.general || {}) }
+        };
+      }
+    }
+
+    const savedTeam = localStorage.getItem(STORAGE_KEYS.ACTIVE_TEAM);
+    if (savedTeam && state.teams[savedTeam]) {
+      state.activeTeam = savedTeam;
+      state.currentRgb = state.teams[savedTeam].ambientRgb;
+      state.match = JSON.parse(JSON.stringify(state.teams[savedTeam].defaultMatch));
+    }
+
+    const savedSound = localStorage.getItem(STORAGE_KEYS.SOUND);
+    if (savedSound !== null) {
+      state.sound.enabled = savedSound === 'true';
+    }
+  } catch (err) {
+    console.warn('Could not read from localStorage:', err);
+  }
+}
+
+async function saveConfig(partial = null) {
+  if (partial) {
+    state.config = {
+      ...state.config,
+      ...partial,
+      homeAssistant: { ...state.config.homeAssistant, ...(partial.homeAssistant || {}) },
+      philipsHue: { ...state.config.philipsHue, ...(partial.philipsHue || {}) },
+      general: { ...state.config.general, ...(partial.general || {}) }
+    };
+  }
+
+  // Always persist immediately to browser localStorage
+  try {
+    localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+  } catch (err) {
+    console.warn('Could not write config to localStorage:', err);
+  }
+
+  // Also send to backend server if running in local server mode
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' ||
+                  window.location.hostname === '127.0.0.1' ||
+                  window.location.hostname.startsWith('192.168.') ||
+                  window.location.hostname.startsWith('10.');
+
+  if (isHttp && isLocal) {
+    try {
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.config)
+      });
+    } catch (err) {
+      // Backend offline or unreachable
+    }
+  }
+}
+
+async function syncServerConfig() {
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' ||
+                  window.location.hostname === '127.0.0.1' ||
+                  window.location.hostname.startsWith('192.168.') ||
+                  window.location.hostname.startsWith('10.');
+
+  if (!isHttp || !isLocal) return;
+
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.config) {
+        const localHue = state.config.philipsHue || {};
+        const serverHue = data.config.philipsHue || {};
+
+        state.config = {
+          ...data.config,
+          homeAssistant: {
+            ...data.config.homeAssistant,
+            ...(state.config.homeAssistant || {})
+          },
+          philipsHue: {
+            ...serverHue,
+            ...localHue,
+            bridgeIp: localHue.bridgeIp || serverHue.bridgeIp || '',
+            username: localHue.username || serverHue.username || ''
+          },
+          general: {
+            ...data.config.general,
+            ...(state.config.general || {})
+          }
+        };
+
+        try {
+          localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+        } catch (e) {}
+
+        renderConfigForms();
+        fetchHaYaml();
+      }
+    }
+  } catch (err) {}
+}
+
 // Populate config forms
 function renderConfigForms() {
   if (!state.config) return;
@@ -577,13 +702,15 @@ function renderConfigForms() {
   if (haWebhookEl) haWebhookEl.value = ha.webhookId || 'game_day_score_celebration';
   const haEntityEl = document.getElementById('ha-entity-id');
   if (haEntityEl) haEntityEl.value = ha.entityId || 'light.living_room_lights';
+  const haTokenEl = document.getElementById('ha-token');
+  if (haTokenEl && ha.accessToken) haTokenEl.value = ha.accessToken;
   toggleHaModeFields(ha.mode || 'webhook');
 
   const hue = state.config.philipsHue || {};
   const hueEnabledEl = document.getElementById('hue-enabled');
   if (hueEnabledEl) hueEnabledEl.checked = !!hue.enabled;
   const hueIpEl = document.getElementById('hue-ip');
-  if (hueIpEl) hueIpEl.value = hue.bridgeIp || '192.168.1.50';
+  if (hueIpEl) hueIpEl.value = hue.bridgeIp || '';
   const hueUserEl = document.getElementById('hue-user');
   if (hueUserEl) hueUserEl.value = hue.username || '';
   const hueTypeEl = document.getElementById('hue-target-type');
@@ -810,6 +937,10 @@ function runLocalAmbient(teamId) {
 // Select Team Action
 async function selectTeam(teamId) {
   state.activeTeam = teamId;
+  try {
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_TEAM, teamId);
+  } catch (e) {}
+
   const team = state.teams[teamId];
   if (team) {
     state.currentRgb = team.ambientRgb;
@@ -869,7 +1000,30 @@ function initSse() {
         state.mode = data.mode;
         state.isCelebrating = data.isCelebrating;
         state.match = data.match;
-        state.config = data.config;
+        if (data.config) {
+          const localHue = state.config.philipsHue || {};
+          const serverHue = data.config.philipsHue || {};
+          state.config = {
+            ...data.config,
+            homeAssistant: {
+              ...data.config.homeAssistant,
+              ...(state.config.homeAssistant || {})
+            },
+            philipsHue: {
+              ...serverHue,
+              ...localHue,
+              bridgeIp: localHue.bridgeIp || serverHue.bridgeIp || '',
+              username: localHue.username || serverHue.username || ''
+            },
+            general: {
+              ...data.config.general,
+              ...(state.config.general || {})
+            }
+          };
+          try {
+            localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+          } catch (err) {}
+        }
         state.logs = data.logs || [];
 
         updateThemeColors();
@@ -878,6 +1032,25 @@ function initSse() {
         renderConfigForms();
         fetchHaYaml();
         highlightActiveTeamCard(state.activeTeam);
+      } catch (err) {}
+    });
+
+    evtSource.addEventListener('config_update', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.config) {
+          state.config = {
+            ...state.config,
+            ...data.config,
+            homeAssistant: { ...state.config.homeAssistant, ...(data.config.homeAssistant || {}) },
+            philipsHue: { ...state.config.philipsHue, ...(data.config.philipsHue || {}) }
+          };
+          try {
+            localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+          } catch (err) {}
+          renderConfigForms();
+          fetchHaYaml();
+        }
       } catch (err) {}
     });
 
@@ -937,6 +1110,9 @@ function setupEventListeners() {
   if (elements.btnSoundToggle) {
     elements.btnSoundToggle.addEventListener('click', () => {
       state.sound.enabled = !state.sound.enabled;
+      try {
+        localStorage.setItem(STORAGE_KEYS.SOUND, String(state.sound.enabled));
+      } catch (e) {}
       if (state.sound.enabled) {
         state.sound.init();
         if (elements.soundIcon) elements.soundIcon.textContent = '🔊';
@@ -1110,49 +1286,67 @@ function setupEventListeners() {
   // Save HA Config
   if (elements.btnSaveHa) {
     elements.btnSaveHa.addEventListener('click', async () => {
-      const updated = {
-        homeAssistant: {
-          enabled: document.getElementById('ha-enabled')?.checked || false,
-          mode: document.getElementById('ha-mode')?.value || 'webhook',
-          host: document.getElementById('ha-host')?.value || 'http://homeassistant.local:8123',
-          webhookId: document.getElementById('ha-webhook-id')?.value || 'game_day_score_celebration',
-          entityId: document.getElementById('ha-entity-id')?.value || 'light.living_room_lights',
-          accessToken: document.getElementById('ha-token')?.value || ''
-        }
+      const updatedHa = {
+        enabled: document.getElementById('ha-enabled')?.checked || false,
+        mode: document.getElementById('ha-mode')?.value || 'webhook',
+        host: (document.getElementById('ha-host')?.value || '').trim() || 'http://homeassistant.local:8123',
+        webhookId: (document.getElementById('ha-webhook-id')?.value || '').trim() || 'game_day_score_celebration',
+        entityId: (document.getElementById('ha-entity-id')?.value || '').trim() || 'light.living_room_lights',
+        accessToken: (document.getElementById('ha-token')?.value || '').trim()
       };
-      try {
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
-        });
-      } catch (e) {}
+      await saveConfig({ homeAssistant: updatedHa });
       fetchHaYaml();
-      alert('Home Assistant settings saved successfully!');
+      alert('✅ Home Assistant settings saved successfully!');
     });
   }
 
   // Save Philips Hue Config
   if (elements.btnSaveHue) {
     elements.btnSaveHue.addEventListener('click', async () => {
-      const updated = {
-        philipsHue: {
-          enabled: document.getElementById('hue-enabled')?.checked ?? true,
-          bridgeIp: document.getElementById('hue-ip')?.value || '',
-          username: document.getElementById('hue-user')?.value || '',
-          targetType: document.getElementById('hue-target-type')?.value || 'group',
-          targetId: document.getElementById('hue-target-id')?.value || '1',
-          useAlertStrobe: document.getElementById('hue-alert-strobe')?.checked ?? true
-        }
+      const bridgeIp = (document.getElementById('hue-ip')?.value || '').trim();
+      const username = (document.getElementById('hue-user')?.value || '').trim();
+      const targetType = document.getElementById('hue-target-type')?.value || 'group';
+      const targetId = (document.getElementById('hue-target-id')?.value || '1').trim();
+      const useAlertStrobe = document.getElementById('hue-alert-strobe')?.checked ?? true;
+      const enabled = document.getElementById('hue-enabled')?.checked ?? true;
+
+      const updatedHue = {
+        enabled,
+        bridgeIp,
+        username,
+        targetType,
+        targetId,
+        useAlertStrobe
       };
+
+      await saveConfig({ philipsHue: updatedHue });
+      renderConfigForms();
+      alert(`✅ Philips Hue settings saved!\n\nBridge IP: ${bridgeIp || '(none entered)'}\nTarget: ${targetType} ${targetId}`);
+    });
+  }
+
+  // Real-time autosave on input change/blur so typing IP is never lost
+  const hueIpInput = document.getElementById('hue-ip');
+  if (hueIpInput) {
+    hueIpInput.addEventListener('change', () => {
+      const val = hueIpInput.value.trim();
+      if (!state.config.philipsHue) state.config.philipsHue = {};
+      state.config.philipsHue.bridgeIp = val;
       try {
-        await fetch('/api/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated)
-        });
+        localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
       } catch (e) {}
-      alert('Philips Hue settings saved successfully!');
+    });
+  }
+
+  const hueUserInput = document.getElementById('hue-user');
+  if (hueUserInput) {
+    hueUserInput.addEventListener('change', () => {
+      const val = hueUserInput.value.trim();
+      if (!state.config.philipsHue) state.config.philipsHue = {};
+      state.config.philipsHue.username = val;
+      try {
+        localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+      } catch (e) {}
     });
   }
 
@@ -1165,9 +1359,16 @@ function setupEventListeners() {
         const res = await fetch('/api/hue/discover', { method: 'POST' });
         const data = await res.json();
         if (data.success && data.bridges && data.bridges.length > 0) {
+          const detectedIp = data.bridges[0].ip;
           const ipEl = document.getElementById('hue-ip');
-          if (ipEl) ipEl.value = data.bridges[0].ip;
-          alert(`Found Hue Bridge at: ${data.bridges[0].ip}`);
+          if (ipEl) ipEl.value = detectedIp;
+          await saveConfig({
+            philipsHue: {
+              ...state.config.philipsHue,
+              bridgeIp: detectedIp
+            }
+          });
+          alert(`Found Hue Bridge at: ${detectedIp}\nBridge IP saved to settings!`);
         } else {
           alert('Could not auto-detect Bridge via cloud. Please enter the Bridge IP shown in your Hue iPhone app.');
         }
@@ -1209,6 +1410,13 @@ function setupEventListeners() {
             pairFeedback.style.color = '#4ade80';
             pairFeedback.textContent = '✅ Bridge paired successfully! Application Key saved.';
           }
+          await saveConfig({
+            philipsHue: {
+              ...state.config.philipsHue,
+              bridgeIp: ip,
+              username: data.username
+            }
+          });
           fetchHueRooms();
         } else {
           if (pairFeedback) {
@@ -1239,12 +1447,19 @@ function setupEventListeners() {
           select.innerHTML += `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.type || 'Room')})</option>`;
         });
         select.style.display = 'block';
-        select.addEventListener('change', () => {
+        select.addEventListener('change', async () => {
           if (select.value) {
             const targetEl = document.getElementById('hue-target-id');
             if (targetEl) targetEl.value = select.value;
             const typeEl = document.getElementById('hue-target-type');
             if (typeEl) typeEl.value = 'group';
+            await saveConfig({
+              philipsHue: {
+                ...state.config.philipsHue,
+                targetType: 'group',
+                targetId: select.value
+              }
+            });
           }
         });
       }
@@ -1402,7 +1617,12 @@ async function loadTeams() {
 
 // Initialize Application
 function initApp() {
+  loadSavedConfig();
   initElements();
+  if (elements.soundIcon && elements.soundLabel) {
+    elements.soundIcon.textContent = state.sound.enabled ? '🔊' : '🔇';
+    elements.soundLabel.textContent = state.sound.enabled ? 'Sound ON' : 'Sound MUTED';
+  }
   setupEventListeners();
   updateThemeColors();
   renderScoreboard();
@@ -1411,6 +1631,7 @@ function initApp() {
   fetchHaYaml();
   renderLogs();
   loadTeams();
+  syncServerConfig();
   initSse();
 }
 
