@@ -841,8 +841,8 @@ body::before {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: rgb(var(--current-light-rgb));
-  box-shadow: 0 0 14px rgb(var(--current-light-rgb));
+  background: rgb(var(--fixture-rgb, var(--current-light-rgb)));
+  box-shadow: 0 0 14px rgb(var(--fixture-rgb, var(--current-light-rgb)));
   transition: all 0.2s ease;
 }
 
@@ -851,7 +851,7 @@ body::before {
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(var(--current-light-rgb), 0.6) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(var(--fixture-rgb, var(--current-light-rgb)), 0.6) 0%, transparent 70%);
   top: -35px;
   pointer-events: none;
   transition: all 0.2s ease;
@@ -870,7 +870,7 @@ body::before {
   position: absolute;
   inset: -14px;
   border-radius: 12px;
-  background: radial-gradient(circle, rgba(var(--current-light-rgb), 0.7) 0%, transparent 80%);
+  background: radial-gradient(circle, rgba(var(--fixture-rgb, var(--current-light-rgb)), 0.7) 0%, transparent 80%);
   filter: blur(12px);
   pointer-events: none;
   transition: background 0.2s ease;
@@ -965,6 +965,21 @@ body::before {
   height: 8px;
   border-radius: 50%;
   background: rgb(var(--current-light-rgb));
+}
+
+.strobe-effect-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 20px;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fbbf24;
+  letter-spacing: 0.5px;
 }
 
 /* Celebration Overlay */

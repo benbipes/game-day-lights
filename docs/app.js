@@ -933,6 +933,10 @@ function renderConfigForms() {
   }
   const hueAlertEl = document.getElementById('hue-alert-strobe');
   if (hueAlertEl) hueAlertEl.checked = !!hue.useAlertStrobe;
+  const huePerBulbEl = document.getElementById('hue-per-bulb');
+  if (huePerBulbEl) huePerBulbEl.checked = hue.perBulbMultiColor !== false;
+  const hueStrobeEl = document.getElementById('hue-strobe-effect');
+  if (hueStrobeEl) hueStrobeEl.value = hue.strobeEffect || 'alternating';
 
   if (Array.isArray(state.cachedHueRooms) && state.cachedHueRooms.length > 0) {
     renderRoomsGrid(state.cachedHueRooms);
@@ -981,6 +985,65 @@ function renderLogs() {
   }
 }
 
+// Strobe Effect Helper for Virtual Fixtures
+function calculateVisualizerFixtureColors({ effect = 'alternating', palette = [], step = 0 }) {
+  if (!palette || palette.length === 0) palette = [[255, 255, 255]];
+  const fixtures = ['pendantLeft', 'pendantRight', 'tvBacklight', 'floorLeft', 'floorRight'];
+  const assignments = {};
+  const len = palette.length;
+
+  switch (effect) {
+    case 'scatter': {
+      fixtures.forEach((id, idx) => {
+        const rand = (idx * 2 + step * 3 + Math.floor(step / 2)) % len;
+        assignments[id] = palette[rand];
+      });
+      break;
+    }
+    case 'wave': {
+      fixtures.forEach((id, idx) => {
+        assignments[id] = palette[(idx + step) % len];
+      });
+      break;
+    }
+    case 'pulse': {
+      const isBurst = step % 2 === 0;
+      fixtures.forEach((id, idx) => {
+        const c1 = palette[idx % 2 === 0 ? 0 : Math.min(1, len - 1)];
+        const c2 = palette[idx % 2 === 0 ? Math.min(2, len - 1) : Math.min(3, len - 1)];
+        assignments[id] = isBurst ? c1 : c2;
+      });
+      break;
+    }
+    case 'alternating':
+    default: {
+      const colorA = palette[0];
+      const colorB = palette.length > 1 ? palette[1] : palette[0];
+      const isEvenStep = step % 2 === 0;
+      fixtures.forEach((id, idx) => {
+        assignments[id] = ((idx % 2 === 0) === isEvenStep) ? colorA : colorB;
+      });
+      break;
+    }
+  }
+  return assignments;
+}
+
+function applyFixtureColors(fixtures) {
+  if (!fixtures) return;
+  const p1 = document.getElementById('bulb-pendant-1');
+  const p2 = document.getElementById('bulb-pendant-2');
+  const tv = document.getElementById('tv-lightstrip-glow');
+  const f1 = document.getElementById('bulb-floor-1');
+  const f2 = document.getElementById('bulb-floor-2');
+
+  if (p1 && fixtures.pendantLeft) p1.style.setProperty('--fixture-rgb', fixtures.pendantLeft.join(', '));
+  if (p2 && fixtures.pendantRight) p2.style.setProperty('--fixture-rgb', fixtures.pendantRight.join(', '));
+  if (tv && fixtures.tvBacklight) tv.style.setProperty('--fixture-rgb', fixtures.tvBacklight.join(', '));
+  if (f1 && fixtures.floorLeft) f1.style.setProperty('--fixture-rgb', fixtures.floorLeft.join(', '));
+  if (f2 && fixtures.floorRight) f2.style.setProperty('--fixture-rgb', fixtures.floorRight.join(', '));
+}
+
 // Update Dynamic CSS Variables and theme
 function updateThemeColors() {
   const root = document.documentElement;
@@ -998,15 +1061,55 @@ function updateThemeColors() {
     elements.colorRgbDisplay.textContent = `RGB(${rgbStr})`;
   }
 
+  const strobeEffect = state.config?.philipsHue?.strobeEffect || 'alternating';
+  const perBulb = state.config?.philipsHue?.perBulbMultiColor !== false;
+
+  const strobeLabels = {
+    alternating: '⚡ Alternating Strobe',
+    scatter: '🌈 Palette Scatter',
+    wave: '🌊 Chasing Wave',
+    pulse: '🚨 Pulse Strobe'
+  };
+
+  const strobeBadge = document.getElementById('visualizer-strobe-badge');
+  if (strobeBadge) {
+    strobeBadge.textContent = strobeLabels[strobeEffect] || '⚡ Alternating Strobe';
+  }
+
+  // Multi-bulb ambient distribution on virtual fixtures when not in active celebration
+  if (!state.isCelebrating) {
+    if (perBulb && team?.celebration?.colors && team.celebration.colors.length > 1) {
+      const c = team.celebration.colors;
+      applyFixtureColors({
+        pendantLeft: c[0],
+        pendantRight: c[1] || c[0],
+        tvBacklight: c[2] || c[0],
+        floorLeft: c[1] || c[0],
+        floorRight: c[0]
+      });
+    } else {
+      const p1 = document.getElementById('bulb-pendant-1');
+      const p2 = document.getElementById('bulb-pendant-2');
+      const tv = document.getElementById('tv-lightstrip-glow');
+      const f1 = document.getElementById('bulb-floor-1');
+      const f2 = document.getElementById('bulb-floor-2');
+      if (p1) p1.style.removeProperty('--fixture-rgb');
+      if (p2) p2.style.removeProperty('--fixture-rgb');
+      if (tv) tv.style.removeProperty('--fixture-rgb');
+      if (f1) f1.style.removeProperty('--fixture-rgb');
+      if (f2) f2.style.removeProperty('--fixture-rgb');
+    }
+  }
+
   if (elements.statusLabel && elements.strobeModeText) {
     if (state.isCelebrating) {
       elements.statusLabel.textContent = '🚨 CELEBRATION STROBE ACTIVE';
-      elements.strobeModeText.textContent = 'GOAL STROBE FLASHING';
+      elements.strobeModeText.textContent = `${(strobeLabels[strobeEffect] || 'STROBE').toUpperCase()} ACTIVE`;
       elements.strobeModeText.style.color = '#ffc62f';
     } else {
       const modeSuffix = state.isStandalone ? ' (Standalone)' : '';
       elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'}${modeSuffix}`;
-      elements.strobeModeText.textContent = 'AMBIENT SYNCED';
+      elements.strobeModeText.textContent = perBulb ? 'MULTI-BULB AMBIENT' : 'AMBIENT SYNCED';
       elements.strobeModeText.style.color = 'var(--team-primary)';
     }
   }
@@ -1350,14 +1453,28 @@ function runLocalCelebration(teamId, eventName = 'GOAL') {
     return colors[nextIdx];
   };
 
+  const strobeEffect = state.config?.philipsHue?.strobeEffect || 'alternating';
+  const perBulb = state.config?.philipsHue?.perBulbMultiColor !== false;
+
+  const updateFlashFrame = () => {
+    state.currentRgb = getNextRandomColor();
+    if (perBulb && colors.length > 1) {
+      const fixtureColors = calculateVisualizerFixtureColors({
+        effect: strobeEffect,
+        palette: colors,
+        step
+      });
+      applyFixtureColors(fixtureColors);
+    }
+    updateThemeColors();
+  };
+
   // Immediate first flash
-  state.currentRgb = getNextRandomColor();
-  updateThemeColors();
+  updateFlashFrame();
 
   localFlashInterval = setInterval(() => {
     step++;
-    state.currentRgb = getNextRandomColor();
-    updateThemeColors();
+    updateFlashFrame();
   }, intervalMs);
 
   setTimeout(() => {
@@ -1549,6 +1666,14 @@ function initSse() {
 
         if (data.celebrationStarted) {
           triggerCelebrationDisplay(data);
+        }
+
+        if (data.fixtureColors) {
+          applyFixtureColors(data.fixtureColors);
+        }
+
+        if (data.strobeEffect && state.config?.philipsHue) {
+          state.config.philipsHue.strobeEffect = data.strobeEffect;
         }
 
         if ((data.isCelebrating === false || data.celebrationEnded) && elements.celebrationOverlay && !elements.celebrationOverlay.classList.contains('hidden')) {
@@ -2064,6 +2189,8 @@ function setupEventListeners() {
       const targetType = document.getElementById('hue-target-type')?.value || 'group';
       const targetId = (document.getElementById('hue-target-id')?.value || '1').trim();
       const useAlertStrobe = document.getElementById('hue-alert-strobe')?.checked ?? false;
+      const perBulbMultiColor = document.getElementById('hue-per-bulb') ? document.getElementById('hue-per-bulb').checked : true;
+      const strobeEffect = document.getElementById('hue-strobe-effect')?.value || 'alternating';
       const enabled = document.getElementById('hue-enabled')?.checked ?? true;
       const targetIds = targetId.split(/[, ]+/).filter(Boolean);
       const updatedHue = {
@@ -2073,7 +2200,9 @@ function setupEventListeners() {
         targetType,
         targetId,
         targetIds: targetIds.length > 0 ? targetIds : ['1'],
-        useAlertStrobe
+        useAlertStrobe,
+        perBulbMultiColor,
+        strobeEffect
       };
 
       await saveConfig({ philipsHue: updatedHue });

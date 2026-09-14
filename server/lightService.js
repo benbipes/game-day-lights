@@ -24,6 +24,87 @@ export function rgbToXy(red, green, blue) {
   return [parseFloat((X / sum).toFixed(4)), parseFloat((Y / sum).toFixed(4))];
 }
 
+// Strobe Effect Generators for Multi-Bulb Lighting
+export function calculateStrobeColors({
+  effect = 'alternating',
+  bulbIds = [],
+  palette = [],
+  step = 0,
+  lastAssignments = {}
+}) {
+  if (!palette || palette.length === 0) palette = [[255, 255, 255]];
+  if (!bulbIds || bulbIds.length === 0) return {};
+
+  const assignments = {};
+  const paletteLen = palette.length;
+
+  switch (effect) {
+    case 'scatter': {
+      // Dynamic random palette scatter: each bulb gets a random color, avoiding immediate repetition
+      bulbIds.forEach((id, idx) => {
+        let colorIdx;
+        const lastColor = lastAssignments[id];
+        let attempts = 0;
+        do {
+          colorIdx = (idx + Math.floor(Math.random() * paletteLen)) % paletteLen;
+          attempts++;
+        } while (attempts < 5 && paletteLen > 1 && lastColor &&
+                 palette[colorIdx][0] === lastColor[0] &&
+                 palette[colorIdx][1] === lastColor[1] &&
+                 palette[colorIdx][2] === lastColor[2]);
+        assignments[id] = palette[colorIdx];
+      });
+      break;
+    }
+    case 'wave': {
+      // Chasing wave / stadium marquee: colors shift across the bulbs sequentially
+      bulbIds.forEach((id, idx) => {
+        const colorIdx = (idx + step) % paletteLen;
+        assignments[id] = palette[colorIdx];
+      });
+      break;
+    }
+    case 'pulse': {
+      // High-intensity pulse: even steps flash primary/secondary, odd steps flash accent/contrast
+      const isPulseBurst = step % 2 === 0;
+      bulbIds.forEach((id, idx) => {
+        const baseColorIdx = (idx % 2 === 0) ? 0 : Math.min(1, paletteLen - 1);
+        const altColorIdx = (idx % 2 === 0) ? Math.min(2, paletteLen - 1) : Math.min(3, paletteLen - 1);
+        assignments[id] = isPulseBurst ? palette[baseColorIdx] : palette[altColorIdx];
+      });
+      break;
+    }
+    case 'alternating':
+    default: {
+      // Alternating dual-tone: Odd and even bulbs alternate team colors and swap each step
+      const colorA = palette[0];
+      const colorB = palette.length > 1 ? palette[1] : palette[0];
+      const isEvenStep = step % 2 === 0;
+      bulbIds.forEach((id, idx) => {
+        const isEvenBulb = idx % 2 === 0;
+        assignments[id] = (isEvenBulb === isEvenStep) ? colorA : colorB;
+      });
+      break;
+    }
+  }
+
+  return assignments;
+}
+
+export function calculateVisualizerFixtureColors({
+  effect = 'alternating',
+  palette = [],
+  step = 0
+}) {
+  const fixtureIds = ['pendantLeft', 'pendantRight', 'tvBacklight', 'floorLeft', 'floorRight'];
+  return calculateStrobeColors({
+    effect,
+    bulbIds: fixtureIds,
+    palette,
+    step
+  });
+}
+
 export class LightService {
   constructor(config) {
     this.config = config;
@@ -238,24 +319,43 @@ export class LightService {
         let colormode = data.action?.colormode || 'xy';
         let hueVal = data.action?.hue;
         let sat = data.action?.sat;
+        const individualBulbs = {};
 
-        // Ground-truth check: query first light in group for true physical bulb state
+        // Snapshot all individual bulbs in the group concurrently
         if (Array.isArray(data.lights) && data.lights.length > 0) {
           try {
-            const firstLightRes = await this.fetchHue(cleanIp, `/api/${hue.username}/lights/${data.lights[0]}`, { method: 'GET', timeout: 2000 });
-            if (firstLightRes.ok) {
-              const lightData = await firstLightRes.json();
+            const bulbFetches = data.lights.map(lid =>
+              this.fetchHue(cleanIp, `/api/${hue.username}/lights/${lid}`, { method: 'GET', timeout: 2500 })
+                .then(r => r.ok ? r.json() : null)
+                .then(lightData => ({ lid, lightData }))
+                .catch(() => ({ lid, lightData: null }))
+            );
+            const settled = await Promise.all(bulbFetches);
+            for (const { lid, lightData } of settled) {
               if (lightData && lightData.state) {
-                if (typeof lightData.state.bri === 'number') bri = lightData.state.bri;
-                if (lightData.state.ct) ct = lightData.state.ct;
-                if (Array.isArray(lightData.state.xy)) xy = lightData.state.xy;
-                if (lightData.state.colormode) colormode = lightData.state.colormode;
-                if (typeof lightData.state.hue === 'number') hueVal = lightData.state.hue;
-                if (typeof lightData.state.sat === 'number') sat = lightData.state.sat;
-                if (typeof lightData.state.on === 'boolean' && data.state?.any_on === undefined) {
-                  wasOn = lightData.state.on;
-                }
+                const s = lightData.state;
+                individualBulbs[lid] = {
+                  id: String(lid),
+                  name: lightData.name || `Light ${lid}`,
+                  wasOn: Boolean(s.on),
+                  bri: typeof s.bri === 'number' ? s.bri : 254,
+                  xy: Array.isArray(s.xy) ? s.xy : null,
+                  ct: typeof s.ct === 'number' ? s.ct : null,
+                  hue: typeof s.hue === 'number' ? s.hue : null,
+                  sat: typeof s.sat === 'number' ? s.sat : null,
+                  colormode: s.colormode || 'xy'
+                };
               }
+            }
+            // Ground-truth check from first bulb
+            const firstBulb = individualBulbs[data.lights[0]];
+            if (firstBulb) {
+              if (typeof firstBulb.bri === 'number') bri = firstBulb.bri;
+              if (firstBulb.ct) ct = firstBulb.ct;
+              if (firstBulb.xy) xy = firstBulb.xy;
+              if (firstBulb.colormode) colormode = firstBulb.colormode;
+              if (typeof firstBulb.hue === 'number') hueVal = firstBulb.hue;
+              if (typeof firstBulb.sat === 'number') sat = firstBulb.sat;
             }
           } catch (e) {
             // Keep group.action values on individual light query timeout
@@ -273,7 +373,8 @@ export class LightService {
           colormode,
           hue: hueVal,
           sat,
-          lights: data.lights,
+          lights: data.lights || [],
+          individualBulbs,
           rawAction: data.action
         };
       } else {
@@ -295,6 +396,35 @@ export class LightService {
     } catch (err) {
       return null;
     }
+  }
+
+  async dispatchHueBulbs(cleanIp, username, bulbAssignments, transitiontime = 2) {
+    const entries = Object.entries(bulbAssignments);
+    if (entries.length === 0) return [];
+
+    const startTime = Date.now();
+    const results = await Promise.allSettled(
+      entries.map(async ([bulbId, rgb]) => {
+        const xy = rgbToXy(rgb[0], rgb[1], rgb[2]);
+        const bri = (rgb[0] < 25 && rgb[1] < 25 && rgb[2] < 25) ? 60 : 254;
+        const payload = {
+          on: true,
+          xy,
+          bri,
+          alert: 'none',
+          transitiontime
+        };
+        const res = await this.fetchHue(cleanIp, `/api/${username}/lights/${bulbId}/state`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          timeout: 2500
+        });
+        return { bulbId, ok: res.ok };
+      })
+    );
+
+    return results;
   }
 
   async dispatchSingleHueTarget(cleanIp, username, targetType, targetId, bodyPayload) {
@@ -477,12 +607,36 @@ export class LightService {
     this.dispatchHomeAssistantService(team.ambientRgb, this.config.general.ambientBrightness || 220);
 
     // 3. Philips Hue Bridge
-    this.dispatchHueBridge({
-      on: true,
-      xy: team.ambientXy,
-      bri: this.config.general.ambientBrightness || 220,
-      transitiontime: 15
-    });
+    const hue = this.config.philipsHue;
+    if (hue && hue.enabled) {
+      const cleanIp = (hue.bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      if (cleanIp && hue.username) {
+        const targetIds = this.getTargetIds();
+        const perBulb = hue.perBulbMultiColor !== false;
+        const palette = team.celebration?.colors || [team.ambientRgb];
+
+        for (const tid of targetIds) {
+          if (perBulb && (hue.targetType || 'group') === 'group') {
+            const state = await this.captureTargetState(tid);
+            if (state && Array.isArray(state.lights) && state.lights.length > 1) {
+              const assignments = {};
+              state.lights.forEach((lid, idx) => {
+                assignments[lid] = palette[idx % palette.length];
+              });
+              await this.dispatchHueBulbs(cleanIp, hue.username, assignments, 15);
+              continue;
+            }
+          }
+          // Default: single group ambient
+          await this.dispatchSingleHueTarget(cleanIp, hue.username, hue.targetType || 'group', tid, {
+            on: true,
+            xy: team.ambientXy,
+            bri: this.config.general.ambientBrightness || 220,
+            transitiontime: 15
+          });
+        }
+      }
+    }
   }
 
   async triggerCelebration(teamId = null, scoreEvent = null) {
@@ -515,12 +669,18 @@ export class LightService {
     const durationMs = durationSeconds * 1000;
     const flashIntervalMs = celebration.flashIntervalMs || 250;
     const celebrationEndTime = Date.now() + durationMs;
+    const hue = this.config.philipsHue;
+    const cleanIp = (hue?.bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const perBulb = hue?.perBulbMultiColor !== false;
+    const strobeEffect = hue?.strobeEffect || 'alternating';
 
     this.addLog('Lighting', 'GOAL_CELEBRATION_START', {
       team: team.name,
       title: celebration.celebrationTitle,
       event: scoreEvent,
       style: celebration.style,
+      strobeEffect,
+      perBulb,
       durationMs,
       durationSeconds
     });
@@ -532,6 +692,7 @@ export class LightService {
       team_name: team.name,
       title: celebration.celebrationTitle,
       style: celebration.style,
+      strobe_effect: strobeEffect,
       score_event: scoreEvent,
       rgb_color: team.ambientRgb,
       colors: celebrationColors,
@@ -564,43 +725,55 @@ export class LightService {
       }
     }
 
-    // Helper for non-repeating random color picker from team palette
-    const getRandomTeamColor = () => {
-      if (!celebrationColors || celebrationColors.length === 0) return [255, 255, 255];
-      if (celebrationColors.length === 1) return celebrationColors[0];
-      let nextIdx;
-      do {
-        nextIdx = Math.floor(Math.random() * celebrationColors.length);
-      } while (nextIdx === this.lastStrobeColorIdx);
-      this.lastStrobeColorIdx = nextIdx;
-      return celebrationColors[nextIdx];
-    };
-
-    // Helper to send a clean Hue color strobe with in-flight concurrency lock
+    // Helper to dispatch hardware strobe step across groups/bulbs
+    let hardwareStep = 0;
+    let lastHardwareAssignments = {};
     let isHardwareDispatchBusy = false;
-    const sendHardwareFlash = async (rgb) => {
+
+    const dispatchHardwareStrobeStep = async () => {
       if (isHardwareDispatchBusy) return;
       isHardwareDispatchBusy = true;
       try {
-        const xy = rgbToXy(rgb[0], rgb[1], rgb[2]);
-        const bri = (rgb[0] < 25 && rgb[1] < 25 && rgb[2] < 25) ? 60 : 254;
-        await this.dispatchHueBridge({
-          on: true,
-          xy,
-          bri,
-          alert: 'none',
-          transitiontime: 2 // 0.2s quick color transition
-        });
+        if (!hue || !hue.enabled || !cleanIp || !hue.username) return;
+
+        for (const tid of targetIds) {
+          const snapshot = this.previousStates ? this.previousStates[tid] : null;
+          const bulbIds = snapshot?.lights || [];
+
+          if (perBulb && (hue.targetType || 'group') === 'group' && bulbIds.length > 1) {
+            // Multi-bulb strobe effect: alternating odd/even, scatter, wave, or pulse
+            const assignments = calculateStrobeColors({
+              effect: strobeEffect,
+              bulbIds,
+              palette: celebrationColors,
+              step: hardwareStep,
+              lastAssignments: lastHardwareAssignments
+            });
+            lastHardwareAssignments = assignments;
+            await this.dispatchHueBulbs(cleanIp, hue.username, assignments, 2);
+          } else {
+            // Unified single-color group strobe fallback
+            const nextRgb = celebrationColors[hardwareStep % celebrationColors.length];
+            const xy = rgbToXy(nextRgb[0], nextRgb[1], nextRgb[2]);
+            await this.dispatchSingleHueTarget(cleanIp, hue.username, hue.targetType || 'group', tid, {
+              on: true,
+              xy,
+              bri: 254,
+              alert: 'none',
+              transitiontime: 2
+            });
+          }
+        }
+        hardwareStep++;
       } finally {
         isHardwareDispatchBusy = false;
       }
     };
 
     // 2. DISPATCH FIRST COLOR FLASH TO HARDWARE IMMEDIATELY
-    const firstColor = getRandomTeamColor();
-    sendHardwareFlash(firstColor);
+    dispatchHardwareStrobeStep();
 
-    // 3. HARDWARE MULTI-COLOR RANDOM STROBE LOOP (1000ms cadence strictly adheres to Philips Hue Zigbee broadcast limit)
+    // 3. HARDWARE MULTI-COLOR STROBE LOOP (1000ms cadence strictly adheres to Philips Hue Zigbee broadcast limit)
     // Stops 800ms before durationMs so the Zigbee radio is completely clear for the restore command!
     const hardwareCadenceMs = 1000;
     this.activeHardwareStrobeInterval = setInterval(() => {
@@ -611,17 +784,23 @@ export class LightService {
         }
         return;
       }
-      const nextRgb = getRandomTeamColor();
-      sendHardwareFlash(nextRgb);
+      dispatchHardwareStrobeStep();
     }, hardwareCadenceMs);
 
     // 4. SOFTWARE STROBE FOR REAL-TIME UI VISUALIZER AND SSE
     this.activeFlashInterval = setInterval(() => {
       this.flashStep++;
-      const nextRgb = getRandomTeamColor();
+      const fixtureColors = calculateVisualizerFixtureColors({
+        effect: strobeEffect,
+        palette: celebrationColors,
+        step: this.flashStep
+      });
+      const nextRgb = celebrationColors[this.flashStep % celebrationColors.length];
       this.currentLightColor = nextRgb;
       this.notifyStateChange({
         flashStep: this.flashStep,
+        strobeEffect,
+        fixtureColors,
         celebrationTitle: celebration.celebrationTitle,
         celebrationTagline: celebration.celebrationTagline,
         audioKey: celebration.audioKey
@@ -633,10 +812,18 @@ export class LightService {
       this.endCelebration();
     }, durationMs);
 
+    const initialFixtures = calculateVisualizerFixtureColors({
+      effect: strobeEffect,
+      palette: celebrationColors,
+      step: 0
+    });
+
     this.notifyStateChange({
       celebrationStarted: true,
       durationMs,
       durationSeconds,
+      strobeEffect,
+      fixtureColors: initialFixtures,
       celebrationTitle: celebration.celebrationTitle,
       celebrationTagline: celebration.celebrationTagline,
       audioKey: celebration.audioKey,
@@ -662,6 +849,8 @@ export class LightService {
     this.currentMode = 'ambient';
     this.currentLightColor = team?.ambientRgb || [200, 16, 46];
 
+    const hue = this.config.philipsHue;
+    const cleanIp = (hue?.bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     const targetIds = this.getTargetIds();
     const restoreOutcomes = {};
 
@@ -670,7 +859,41 @@ export class LightService {
       targetIds.map(async (id) => {
         const saved = this.previousStates ? this.previousStates[id] : null;
         if (saved) {
-          if (!saved.wasOn) {
+          // If group has individual bulb snapshots, restore each bulb individually!
+          if (saved.isGroup && saved.individualBulbs && Object.keys(saved.individualBulbs).length > 0 && cleanIp && hue.username) {
+            restoreOutcomes[id] = { action: 'restore_individual_bulbs', bulbs: {} };
+            await Promise.allSettled(
+              Object.entries(saved.individualBulbs).map(async ([bulbId, bState]) => {
+                if (!bState.wasOn) {
+                  // Bulb was OFF -> Turn it back OFF
+                  restoreOutcomes[id].bulbs[bulbId] = { action: 'turn_off' };
+                  await this.dispatchSingleHueTarget(cleanIp, hue.username, 'light', bulbId, { on: false, alert: 'none' });
+                } else {
+                  // Bulb was ON -> Restore exact prior brightness and color
+                  const bPayload = {
+                    on: true,
+                    bri: typeof bState.bri === 'number' ? bState.bri : 254,
+                    alert: 'none',
+                    transitiontime: 8
+                  };
+                  if (bState.colormode === 'ct' && bState.ct) {
+                    bPayload.ct = bState.ct;
+                  } else if (bState.colormode === 'hs' && typeof bState.hue === 'number') {
+                    bPayload.hue = bState.hue;
+                    if (typeof bState.sat === 'number') bPayload.sat = bState.sat;
+                  } else if (bState.xy && Array.isArray(bState.xy)) {
+                    bPayload.xy = bState.xy;
+                  } else if (bState.ct) {
+                    bPayload.ct = bState.ct;
+                  } else if (team?.ambientXy) {
+                    bPayload.xy = team.ambientXy;
+                  }
+                  restoreOutcomes[id].bulbs[bulbId] = { action: 'restore_state', payload: bPayload };
+                  await this.dispatchSingleHueTarget(cleanIp, hue.username, 'light', bulbId, bPayload);
+                }
+              })
+            );
+          } else if (!saved.wasOn) {
             // Room/light was previously OFF -> Turn it back OFF
             restoreOutcomes[id] = { action: 'turn_off' };
             await this.dispatchHueBridge({ on: false, alert: 'none' }, id);

@@ -194,7 +194,9 @@ export const DEFAULT_USER_CONFIG = {
     targetType: 'group', // 'group' or 'light'
     targetId: '1', // legacy single target ID
     targetIds: ['1'], // multi-room target IDs
-    useAlertStrobe: false
+    useAlertStrobe: false,
+    perBulbMultiColor: true, // distribute team colors across individual bulbs in room
+    strobeEffect: 'alternating' // 'alternating' | 'scatter' | 'wave' | 'pulse'
   },
   // General options
   general: {

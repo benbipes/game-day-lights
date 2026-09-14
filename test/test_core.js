@@ -2,7 +2,7 @@
 
 import assert from 'node:assert';
 import { TEAMS, DEFAULT_USER_CONFIG } from '../server/config.js';
-import { LightService, rgbToXy } from '../server/lightService.js';
+import { LightService, rgbToXy, calculateStrobeColors, calculateVisualizerFixtureColors } from '../server/lightService.js';
 import { EspnService } from '../server/espnService.js';
 
 console.log('🧪 Starting Game Day Lights Automated Test Suite...\n');
@@ -238,6 +238,101 @@ const finalMatchLoss = espnService.calculateLiveWinProbability({
 assert.strictEqual(finalMatchLoss, 0.0, 'Final losing score gives 0% win probability');
 
 console.log('  ✅ Betting lines and dynamic win probability calculations verified!');
+
+// Test 6: Multi-Bulb Color Distribution, Strobe Effects & Individual Bulb Restoration
+console.log('▶ Test 6: Multi-Bulb Strobe Effects & Individual Bulb State Restoration');
+
+// 6a: Strobe Color Calculations across modes
+const palette = [[200, 16, 46], [255, 255, 255], [0, 0, 0]];
+const testBulbIds = ['1', '2', '3', '4'];
+
+// Alternating Mode
+const altStep0 = calculateStrobeColors({ effect: 'alternating', bulbIds: testBulbIds, palette, step: 0 });
+assert.deepStrictEqual(altStep0['1'], palette[0], 'Alternating step 0 bulb 1 is colorA');
+assert.deepStrictEqual(altStep0['2'], palette[1], 'Alternating step 0 bulb 2 is colorB');
+assert.deepStrictEqual(altStep0['3'], palette[0], 'Alternating step 0 bulb 3 is colorA');
+
+const altStep1 = calculateStrobeColors({ effect: 'alternating', bulbIds: testBulbIds, palette, step: 1 });
+assert.deepStrictEqual(altStep1['1'], palette[1], 'Alternating step 1 bulb 1 swaps to colorB');
+assert.deepStrictEqual(altStep1['2'], palette[0], 'Alternating step 1 bulb 2 swaps to colorA');
+
+// Wave Mode
+const waveStep0 = calculateStrobeColors({ effect: 'wave', bulbIds: testBulbIds, palette, step: 0 });
+const waveStep1 = calculateStrobeColors({ effect: 'wave', bulbIds: testBulbIds, palette, step: 1 });
+assert.deepStrictEqual(waveStep0['1'], palette[0], 'Wave step 0 bulb 1 is palette[0]');
+assert.deepStrictEqual(waveStep1['1'], palette[1], 'Wave step 1 bulb 1 shifts to palette[1]');
+
+// Pulse Mode
+const pulseBurst = calculateStrobeColors({ effect: 'pulse', bulbIds: testBulbIds, palette, step: 0 });
+const pulseAlt = calculateStrobeColors({ effect: 'pulse', bulbIds: testBulbIds, palette, step: 1 });
+assert.ok(pulseBurst['1'] && pulseAlt['1'], 'Pulse generates assignments for both burst and alternate phases');
+
+// Scatter Mode
+const scatterAssignments = calculateStrobeColors({ effect: 'scatter', bulbIds: testBulbIds, palette, step: 0 });
+testBulbIds.forEach(id => {
+  assert.ok(palette.some(c => c[0] === scatterAssignments[id][0] && c[1] === scatterAssignments[id][1] && c[2] === scatterAssignments[id][2]),
+    `Bulb ${id} assigned valid color from palette in scatter mode`);
+});
+
+// Visualizer Fixture Colors
+const visualizerFixtures = calculateVisualizerFixtureColors({ effect: 'alternating', palette, step: 0 });
+['pendantLeft', 'pendantRight', 'tvBacklight', 'floorLeft', 'floorRight'].forEach(fid => {
+  assert.ok(visualizerFixtures[fid], `Visualizer fixture ${fid} received assigned color`);
+});
+console.log('  ✅ Strobe effect algorithms validated: Alternating, Wave, Pulse, Scatter & Virtual Fixtures');
+
+// 6b: Individual Bulb State Restoration
+const individualDispatches = [];
+const multiBulbLightService = new LightService(DEFAULT_USER_CONFIG);
+multiBulbLightService.updateConfig({
+  philipsHue: {
+    enabled: true,
+    bridgeIp: '192.168.86.174',
+    username: 'test-user-token',
+    targetIds: ['1'],
+    perBulbMultiColor: true,
+    strobeEffect: 'alternating'
+  }
+});
+
+multiBulbLightService.dispatchSingleHueTarget = async (cleanIp, username, targetType, targetId, payload) => {
+  individualDispatches.push({ targetType, targetId, payload });
+  return { success: true, targetId };
+};
+
+// Group 1 contains bulbs '10', '11', '12' with individual prior states
+multiBulbLightService.previousStates = {
+  '1': {
+    targetId: '1',
+    isGroup: true,
+    individualBulbs: {
+      '10': { wasOn: false },
+      '11': { wasOn: true, bri: 210, ct: 350, colormode: 'ct' },
+      '12': { wasOn: true, bri: 180, hue: 45000, sat: 200, colormode: 'hs' }
+    }
+  }
+};
+
+await multiBulbLightService.endCelebration();
+
+const bulb10 = individualDispatches.find(d => d.targetId === '10');
+assert.ok(bulb10, 'Bulb 10 received individual restore dispatch');
+assert.strictEqual(bulb10.payload.on, false, 'Bulb 10 that was OFF restored to OFF');
+
+const bulb11 = individualDispatches.find(d => d.targetId === '11');
+assert.ok(bulb11, 'Bulb 11 received individual restore dispatch');
+assert.strictEqual(bulb11.payload.on, true, 'Bulb 11 restored to ON');
+assert.strictEqual(bulb11.payload.bri, 210, 'Bulb 11 restored prior brightness (210)');
+assert.strictEqual(bulb11.payload.ct, 350, 'Bulb 11 restored prior color temperature (350)');
+
+const bulb12 = individualDispatches.find(d => d.targetId === '12');
+assert.ok(bulb12, 'Bulb 12 received individual restore dispatch');
+assert.strictEqual(bulb12.payload.on, true, 'Bulb 12 restored to ON');
+assert.strictEqual(bulb12.payload.bri, 180, 'Bulb 12 restored prior brightness (180)');
+assert.strictEqual(bulb12.payload.hue, 45000, 'Bulb 12 restored prior hue (45000)');
+assert.strictEqual(bulb12.payload.sat, 200, 'Bulb 12 restored prior saturation (200)');
+
+console.log('  ✅ Individual bulb restoration validated: exact power, brightness, ct, and hue/sat restored per fixture!');
 
 espnService.stopPolling();
 

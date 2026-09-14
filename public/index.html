@@ -307,6 +307,7 @@
             <div class="visualizer-title">
               <span class="card-icon">💡</span>
               <h3>Living Room Hue Simulation</h3>
+              <span class="strobe-effect-badge" id="visualizer-strobe-badge">⚡ Alternating Strobe</span>
             </div>
             <div class="visualizer-status" id="visualizer-color-label">
               Color: <span class="color-code" id="color-rgb-display">RGB(200, 16, 46)</span>
@@ -509,8 +510,29 @@
               <div class="form-group">
                 <div class="checkbox-toggle">
                   <input type="checkbox" id="hue-alert-strobe">
-                  <label for="hue-alert-strobe">Enable Active Multi-Color Hardware Strobe (cycles all team colors & auto-restores exact state)</label>
+                  <label for="hue-alert-strobe">Enable Active Multi-Color Hardware Strobe (cycles team colors & auto-restores exact state)</label>
                 </div>
+              </div>
+
+              <div class="form-group">
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="hue-per-bulb" checked>
+                  <label for="hue-per-bulb">Allow individual bulbs in room to display different colors from each other</label>
+                </div>
+                <small class="field-hint" style="display: block; margin-top: 0.3rem;">
+                  When enabled, multiple bulbs in the same room (e.g. Living Room) display different team colors simultaneously.
+                </small>
+              </div>
+
+              <div class="form-group">
+                <label for="hue-strobe-effect">Celebration Strobe Effect</label>
+                <select id="hue-strobe-effect" class="form-control">
+                  <option value="alternating">⚡ Alternating Dual-Tone (Odd/Even bulbs alternate & swap colors)</option>
+                  <option value="scatter">🌈 Palette Scatter (Every bulb flashes a random team color)</option>
+                  <option value="wave">🌊 Chasing Wave (Colors pulse sequentially across your lights)</option>
+                  <option value="pulse">🚨 High-Intensity Pulse (Rapid flashes with synchronized color bursts)</option>
+                </select>
+                <small class="field-hint">Select the active light animation pattern used during celebration scores.</small>
               </div>
 
               <div class="form-actions">
