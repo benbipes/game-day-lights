@@ -412,12 +412,23 @@ const server = http.createServer(async (req, res) => {
   // GET /api/hue/rooms
   if (pathname === '/api/hue/rooms' && req.method === 'GET') {
     try {
-      const bridgeIp = userConfig.philipsHue.bridgeIp;
-      const username = userConfig.philipsHue.username;
+      const bridgeIp = (url.searchParams.get('bridgeIp') || userConfig.philipsHue.bridgeIp || '').trim();
+      const username = (url.searchParams.get('username') || userConfig.philipsHue.username || '').trim();
+      if (!bridgeIp || !username) {
+        return sendJson(res, 400, {
+          success: false,
+          error: 'Missing Bridge IP or Application Key (username).'
+        });
+      }
       const result = await lightService.getHueRooms(bridgeIp, username);
+      if (result.success) {
+        userConfig.philipsHue.bridgeIp = bridgeIp;
+        userConfig.philipsHue.username = username;
+        saveConfigToFile(userConfig);
+      }
       return sendJson(res, 200, result);
     } catch (err) {
-      return sendJson(res, 500, { error: err.message });
+      return sendJson(res, 500, { success: false, error: err.message });
     }
   }
 
