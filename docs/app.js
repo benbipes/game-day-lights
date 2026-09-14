@@ -429,70 +429,74 @@ const state = {
 
 
 // DOM References
-const elements = {
-  celebrationOverlay: document.getElementById('celebration-overlay'),
-  celebrationTitle: document.getElementById('celebration-title'),
-  celebrationTagline: document.getElementById('celebration-tagline'),
-  celebrationBadge: document.getElementById('celebration-badge'),
-  celebrationProgressBar: document.getElementById('celebration-progress-bar'),
+let elements = {};
 
-  statusLabel: document.getElementById('status-label'),
-  systemStatusIndicator: document.getElementById('system-status-indicator'),
-  headerBulbIndicator: document.getElementById('header-bulb-indicator'),
-  btnSoundToggle: document.getElementById('btn-sound-toggle'),
-  soundIcon: document.getElementById('sound-icon'),
-  soundLabel: document.getElementById('sound-label'),
-  btnQuickCelebrate: document.getElementById('btn-quick-celebrate'),
-  btnQuickAmbient: document.getElementById('btn-quick-ambient'),
+function initElements() {
+  elements = {
+    celebrationOverlay: document.getElementById('celebration-overlay'),
+    celebrationTitle: document.getElementById('celebration-title'),
+    celebrationTagline: document.getElementById('celebration-tagline'),
+    celebrationBadge: document.getElementById('celebration-badge'),
+    celebrationProgressBar: document.getElementById('celebration-progress-bar'),
 
-  // Scoreboard
-  matchLeagueBadge: document.getElementById('match-league-badge'),
-  matchPeriodClock: document.getElementById('match-period-clock'),
-  scoreTeamLogoWrap: document.getElementById('score-team-badge'),
-  scoreTeamName: document.getElementById('score-team-name'),
-  scoreTeamPts: document.getElementById('score-team-pts'),
-  scoreOpponentName: document.getElementById('score-opponent-name'),
-  scoreOpponentPts: document.getElementById('score-opponent-pts'),
-  matchLastEvent: document.getElementById('match-last-event'),
-  btnSimScoreText: document.getElementById('btn-sim-score-text'),
+    statusLabel: document.getElementById('status-label'),
+    systemStatusIndicator: document.getElementById('system-status-indicator'),
+    headerBulbIndicator: document.getElementById('header-bulb-indicator'),
+    btnSoundToggle: document.getElementById('btn-sound-toggle'),
+    soundIcon: document.getElementById('sound-icon'),
+    soundLabel: document.getElementById('sound-label'),
+    btnQuickCelebrate: document.getElementById('btn-quick-celebrate'),
+    btnQuickAmbient: document.getElementById('btn-quick-ambient'),
 
-  // Visualizer
-  colorRgbDisplay: document.getElementById('color-rgb-display'),
-  roomAmbientWash: document.getElementById('room-ambient-wash'),
-  tvScreen: document.getElementById('tv-screen'),
-  screenTeamIcon: document.getElementById('screen-team-icon'),
-  screenMatchupText: document.getElementById('screen-matchup-text'),
-  screenClockText: document.getElementById('screen-clock-text'),
-  strobeModeText: document.getElementById('strobe-mode-text'),
+    // Scoreboard
+    matchLeagueBadge: document.getElementById('match-league-badge'),
+    matchPeriodClock: document.getElementById('match-period-clock'),
+    scoreTeamLogoWrap: document.getElementById('score-team-badge'),
+    scoreTeamName: document.getElementById('score-team-name'),
+    scoreTeamPts: document.getElementById('score-team-pts'),
+    scoreOpponentName: document.getElementById('score-opponent-name'),
+    scoreOpponentPts: document.getElementById('score-opponent-pts'),
+    matchLastEvent: document.getElementById('match-last-event'),
+    btnSimScoreText: document.getElementById('btn-sim-score-text'),
 
-  // Tabs
-  tabButtons: document.querySelectorAll('.tab-btn'),
-  tabPanels: document.querySelectorAll('.tab-panel'),
+    // Visualizer
+    colorRgbDisplay: document.getElementById('color-rgb-display'),
+    roomAmbientWash: document.getElementById('room-ambient-wash'),
+    tvScreen: document.getElementById('tv-screen'),
+    screenTeamIcon: document.getElementById('screen-team-icon'),
+    screenMatchupText: document.getElementById('screen-matchup-text'),
+    screenClockText: document.getElementById('screen-clock-text'),
+    strobeModeText: document.getElementById('strobe-mode-text'),
 
-  // HA & Hue Config
-  haYamlBlock: document.getElementById('ha-yaml-block'),
-  btnCopyYaml: document.getElementById('btn-copy-yaml'),
-  btnSaveHa: document.getElementById('btn-save-ha'),
-  btnTestHa: document.getElementById('btn-test-ha'),
-  btnSaveHue: document.getElementById('btn-save-hue'),
-  btnTestHue: document.getElementById('btn-test-hue'),
-  haModeSelect: document.getElementById('ha-mode'),
-  groupHaToken: document.getElementById('group-ha-token'),
+    // Tabs
+    tabButtons: document.querySelectorAll('.tab-btn'),
+    tabPanels: document.querySelectorAll('.tab-panel'),
 
-  // Webhook
-  webhookUrlDisplay: document.getElementById('webhook-url-display'),
-  webhookEspnUrlDisplay: document.getElementById('webhook-espn-url-display'),
-  btnCopyWebhookUrl: document.getElementById('btn-copy-webhook-url'),
-  btnCopyEspnUrl: document.getElementById('btn-copy-espn-url'),
-  testWebhookPayload: document.getElementById('test-webhook-payload'),
-  btnSendTestWebhook: document.getElementById('btn-send-test-webhook'),
-  testWebhookResult: document.getElementById('test-webhook-result'),
+    // HA & Hue Config
+    haYamlBlock: document.getElementById('ha-yaml-block'),
+    btnCopyYaml: document.getElementById('btn-copy-yaml'),
+    btnSaveHa: document.getElementById('btn-save-ha'),
+    btnTestHa: document.getElementById('btn-test-ha'),
+    btnSaveHue: document.getElementById('btn-save-hue'),
+    btnTestHue: document.getElementById('btn-test-hue'),
+    haModeSelect: document.getElementById('ha-mode'),
+    groupHaToken: document.getElementById('group-ha-token'),
 
-  // Logs
-  logsContainer: document.getElementById('logs-container'),
-  logCount: document.getElementById('log-count'),
-  btnClearLogs: document.getElementById('btn-clear-logs')
-};
+    // Webhook
+    webhookUrlDisplay: document.getElementById('webhook-url-display'),
+    webhookEspnUrlDisplay: document.getElementById('webhook-espn-url-display'),
+    btnCopyWebhookUrl: document.getElementById('btn-copy-webhook-url'),
+    btnCopyEspnUrl: document.getElementById('btn-copy-espn-url'),
+    testWebhookPayload: document.getElementById('test-webhook-payload'),
+    btnSendTestWebhook: document.getElementById('btn-send-test-webhook'),
+    testWebhookResult: document.getElementById('test-webhook-result'),
+
+    // Logs
+    logsContainer: document.getElementById('logs-container'),
+    logCount: document.getElementById('log-count'),
+    btnClearLogs: document.getElementById('btn-clear-logs')
+  };
+}
 
 // Connect SSE stream for real-time updates
 function initSse() {
@@ -1098,24 +1102,36 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
 async function loadTeams() {
   try {
     const res = await fetch('/api/teams');
-    const data = await res.json();
-    state.teams = data.teams;
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.teams) {
+        state.teams = data.teams;
+        updateThemeColors();
+        renderScoreboard();
+      }
+    }
   } catch (err) {
-    console.error('Failed to load teams:', err);
+    // Keep client-side fallback teams
   }
 }
 
 // Initialize Application
-async function initApp() {
+function initApp() {
+  initElements();
+  setupEventListeners();
   updateThemeColors();
   renderScoreboard();
   highlightActiveTeamCard(state.activeTeam);
   renderConfigForms();
   fetchHaYaml();
-  await loadTeams();
-  setupEventListeners();
+  loadTeams();
   initSse();
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
+
 
