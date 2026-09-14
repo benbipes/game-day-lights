@@ -65,6 +65,11 @@
         <button id="btn-quick-ambient" class="btn btn-secondary">
           <span>🔆 Reset to Ambient</span>
         </button>
+
+        <button id="btn-open-settings" class="btn btn-secondary btn-icon" title="Configure Philips Hue Bridge, Rooms & Settings">
+          <span>⚙️</span>
+          <span class="btn-text">Setup & Settings</span>
+        </button>
       </div>
     </header>
 
@@ -409,9 +414,25 @@
           </div>
         </div>
       </section>
+    </main>
 
-      <!-- Section 3: Webhook, Home Assistant & Integration Setup Studio -->
-      <section class="section-integration-hub">
+    <!-- Modal Dialog: Hardware, Philips Hue & Integration Studio -->
+    <div id="settings-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
+      <div class="modal-container settings-modal-container">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <div class="modal-badge-icon">⚙️</div>
+            <div>
+              <h2 id="modal-settings-title" class="modal-title">Hardware & Integrations Studio</h2>
+              <p class="modal-subtitle">Direct Philips Hue Bridge setup, multi-room light syncing, webhooks, and live telemetry</p>
+            </div>
+          </div>
+          <button id="btn-close-settings" class="modal-close-button" aria-label="Close Settings">✕</button>
+        </div>
+
+        <div class="modal-content-body">
+          <!-- Section 3: Webhook, Home Assistant & Integration Setup Studio -->
+          <section class="section-integration-hub modal-integration-hub">
         <div class="integration-tabs-header">
           <button class="tab-btn active" data-tab="tab-philips-hue">
             <span class="tab-icon">💡</span> Philips Hue Bridge (Direct)
@@ -680,16 +701,21 @@
             <!-- Dynamically populated -->
           </div>
         </div>
-      </section>
-    </main>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-left">
-        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), and Liverpool FC (EPL).
+        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), Tennessee Volunteers (NCAA), and Liverpool FC (EPL).
       </div>
-      <div class="footer-right">
-        <span>Backend: Node.js 24 Native</span> • <span>Connected: Philips Hue & Home Assistant</span>
+      <div class="footer-right" style="display: flex; align-items: center; gap: 0.8rem;">
+        <span class="footer-dim">Philips Hue & Home Assistant Synced</span>
+        <button id="btn-open-settings-footer" class="btn btn-xs btn-outline" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+          <span>⚙️</span> <span>Setup & Settings</span>
+        </button>
       </div>
     </footer>
   </div>

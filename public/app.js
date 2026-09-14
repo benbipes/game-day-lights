@@ -1849,6 +1849,70 @@ function setupEventListeners() {
     });
   }
 
+  // ==========================================================================
+  // Settings & Integrations Modal Controller
+  // ==========================================================================
+  const settingsModal = document.getElementById('settings-modal');
+  const btnOpenSettings = document.getElementById('btn-open-settings');
+  const btnOpenSettingsFooter = document.getElementById('btn-open-settings-footer');
+  const btnCloseSettings = document.getElementById('btn-close-settings');
+  const statusIndicator = document.getElementById('system-status-indicator');
+
+  function openSettingsModal(targetTab = null) {
+    if (!settingsModal) return;
+    settingsModal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+
+    if (targetTab) {
+      const tabBtn = document.querySelector(`.tab-btn[data-tab="${targetTab}"]`);
+      if (tabBtn) tabBtn.click();
+    }
+
+    if (typeof cachedHueRooms !== 'undefined' && cachedHueRooms.length === 0) {
+      if (state.config?.philipsHue?.bridgeIp && state.config?.philipsHue?.username) {
+        fetchHueRooms();
+      }
+    }
+  }
+
+  function closeSettingsModal() {
+    if (!settingsModal) return;
+    settingsModal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+
+  if (btnOpenSettings) {
+    btnOpenSettings.addEventListener('click', () => openSettingsModal());
+  }
+
+  if (btnOpenSettingsFooter) {
+    btnOpenSettingsFooter.addEventListener('click', () => openSettingsModal());
+  }
+
+  if (btnCloseSettings) {
+    btnCloseSettings.addEventListener('click', () => closeSettingsModal());
+  }
+
+  if (statusIndicator) {
+    statusIndicator.style.cursor = 'pointer';
+    statusIndicator.title = 'Click to open Setup & Settings';
+    statusIndicator.addEventListener('click', () => openSettingsModal());
+  }
+
+  if (settingsModal) {
+    settingsModal.addEventListener('click', (e) => {
+      if (e.target === settingsModal) {
+        closeSettingsModal();
+      }
+    });
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsModal && !settingsModal.classList.contains('hidden')) {
+      closeSettingsModal();
+    }
+  });
+
   // Tabs Switching
   const tabButtons = document.querySelectorAll('.tab-btn');
   const tabPanels = document.querySelectorAll('.tab-panel');
