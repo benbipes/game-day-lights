@@ -183,6 +183,76 @@ export class LightService {
     }
   }
 
+  // --- Hue Bridge Auto-Discovery & Pairing ---
+
+  async discoverHueBridges() {
+    try {
+      const res = await fetch('https://discovery.meethue.com/', { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          return { success: true, bridges: list.map(b => ({ id: b.id, ip: b.internalipaddress })) };
+        }
+      }
+    } catch (err) {
+      // Cloud discovery fallback
+    }
+    return { success: false, message: 'Could not auto-discover from cloud. Please enter your Bridge IP manually.' };
+  }
+
+  async pairHueBridge(bridgeIp) {
+    const cleanIp = (bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    try {
+      const res = await fetch(`http://${cleanIp}/api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ devicetype: 'game_day_lights#mac' }),
+        signal: AbortSignal.timeout(5000)
+      });
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]) {
+        if (data[0].error) {
+          if (data[0].error.type === 101) {
+            return {
+              success: false,
+              linkButtonRequired: true,
+              message: 'Link button not pressed! Press the large round button on top of your Hue Bridge, then click Pair again within 30 seconds.'
+            };
+          }
+          return { success: false, error: data[0].error.description };
+        }
+        if (data[0].success) {
+          const username = data[0].success.username;
+          this.config.philipsHue.bridgeIp = cleanIp;
+          this.config.philipsHue.username = username;
+          this.addLog('Philips Hue', 'BRIDGE_PAIRED', { bridgeIp: cleanIp, username });
+          return { success: true, username, bridgeIp: cleanIp };
+        }
+      }
+      return { success: false, message: 'Unexpected response from Hue Bridge' };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  async getHueRooms(bridgeIp, username) {
+    const cleanIp = (bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    try {
+      const res = await fetch(`http://${cleanIp}/api/${username}/groups`, { signal: AbortSignal.timeout(4000) });
+      const groups = await res.json();
+      const rooms = [];
+      if (typeof groups === 'object' && !groups.error) {
+        for (const [id, grp] of Object.entries(groups)) {
+          rooms.push({ id, name: grp.name, type: grp.type, lights: grp.lights || [] });
+        }
+      }
+      return { success: true, rooms };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+
   // --- Lighting Orchestration ---
 
   async setAmbientLighting(teamId = null) {

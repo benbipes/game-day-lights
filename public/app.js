@@ -889,6 +889,116 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
     alert('Philips Hue settings saved successfully!');
   });
 
+  // Auto-Detect Hue Bridge
+  const btnDiscoverHue = document.getElementById('btn-discover-hue');
+  if (btnDiscoverHue) {
+    btnDiscoverHue.addEventListener('click', async () => {
+      btnDiscoverHue.textContent = 'Searching...';
+      try {
+        const res = await fetch('/api/hue/discover', { method: 'POST' });
+        const data = await res.json();
+        if (data.success && data.bridges && data.bridges.length > 0) {
+          document.getElementById('hue-ip').value = data.bridges[0].ip;
+          alert(`Found Hue Bridge at: ${data.bridges[0].ip}`);
+        } else {
+          alert('Could not auto-detect Bridge via cloud. Please enter the Bridge IP shown in your Hue iPhone app.');
+        }
+      } catch (err) {
+        alert('Could not reach discovery service. Please enter the Bridge IP manually.');
+      } finally {
+        btnDiscoverHue.textContent = '🔍 Auto-Detect IP';
+      }
+    });
+  }
+
+  // Pair Hue Bridge (Press Button)
+  const btnPairHue = document.getElementById('btn-pair-hue');
+  const pairFeedback = document.getElementById('hue-pair-feedback');
+  if (btnPairHue) {
+    btnPairHue.addEventListener('click', async () => {
+      const ip = document.getElementById('hue-ip').value.trim();
+      if (!ip) {
+        alert('Please enter your Hue Bridge IP first.');
+        return;
+      }
+      btnPairHue.textContent = 'Pairing...';
+      if (pairFeedback) {
+        pairFeedback.style.display = 'block';
+        pairFeedback.textContent = 'Contacting Hue Bridge...';
+      }
+      try {
+        const res = await fetch('/api/hue/pair', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bridgeIp: ip })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('hue-user').value = data.username;
+          if (pairFeedback) {
+            pairFeedback.style.color = '#4ade80';
+            pairFeedback.textContent = '✅ Bridge paired successfully! Application Key saved.';
+          }
+          fetchHueRooms();
+        } else {
+          if (pairFeedback) {
+            pairFeedback.style.color = '#fbbf24';
+            pairFeedback.textContent = data.message || data.error || 'Failed to pair with bridge.';
+          }
+        }
+      } catch (err) {
+        if (pairFeedback) {
+          pairFeedback.style.color = '#ef4444';
+          pairFeedback.textContent = 'Error connecting to bridge: ' + err.message;
+        }
+      } finally {
+        btnPairHue.textContent = '🔘 Pair Bridge (Press Button)';
+      }
+    });
+  }
+
+  // Fetch Rooms
+  async function fetchHueRooms() {
+    try {
+      const res = await fetch('/api/hue/rooms');
+      const data = await res.json();
+      const select = document.getElementById('hue-room-select');
+      if (select && data.success && data.rooms && data.rooms.length > 0) {
+        select.innerHTML = '<option value="">-- Select Your Room / Group --</option>';
+        data.rooms.forEach(r => {
+          select.innerHTML += `<option value="${r.id}">${r.name} (${r.type || 'Room'})</option>`;
+        });
+        select.style.display = 'block';
+        select.addEventListener('change', () => {
+          if (select.value) {
+            document.getElementById('hue-target-id').value = select.value;
+            document.getElementById('hue-target-type').value = 'group';
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
+  const btnFetchRooms = document.getElementById('btn-fetch-rooms');
+  if (btnFetchRooms) {
+    btnFetchRooms.addEventListener('click', fetchHueRooms);
+  }
+
+  // Test Hue Flash
+  if (elements.btnTestHue) {
+    elements.btnTestHue.addEventListener('click', async () => {
+      runLocalCelebration(state.activeTeam, 'HUE TEST');
+      try {
+        await fetch('/api/test-celebration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: state.activeTeam })
+        });
+      } catch (e) {}
+    });
+  }
+
+
   // Copy YAML
   elements.btnCopyYaml.addEventListener('click', () => {
     const yaml = elements.haYamlBlock.innerText;

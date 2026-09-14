@@ -331,11 +331,11 @@
       <!-- Section 3: Webhook, Home Assistant & Integration Setup Studio -->
       <section class="section-integration-hub">
         <div class="integration-tabs-header">
-          <button class="tab-btn active" data-tab="tab-home-assistant">
-            <span class="tab-icon">🏠</span> Home Assistant Setup
+          <button class="tab-btn active" data-tab="tab-philips-hue">
+            <span class="tab-icon">💡</span> Philips Hue Bridge (Direct)
           </button>
-          <button class="tab-btn" data-tab="tab-philips-hue">
-            <span class="tab-icon">💡</span> Philips Hue Bridge
+          <button class="tab-btn" data-tab="tab-home-assistant">
+            <span class="tab-icon">🏠</span> Home Assistant (Optional)
           </button>
           <button class="tab-btn" data-tab="tab-webhook-studio">
             <span class="tab-icon">📡</span> Webhook Ingestion API
@@ -345,17 +345,106 @@
           </button>
         </div>
 
-        <!-- Tab 1: Home Assistant -->
-        <div class="tab-panel active" id="tab-home-assistant">
+        <!-- Tab 1: Philips Hue Bridge Direct -->
+        <div class="tab-panel active" id="tab-philips-hue">
           <div class="integration-grid">
             <div class="config-form-col">
-              <h3>Home Assistant Configuration</h3>
-              <p class="panel-desc">Configure incoming webhook triggers or direct REST service commands.</p>
+              <h3>Philips Hue Bridge Direct Connection</h3>
+              <p class="panel-desc">Connect directly to your Philips Hue Bridge on your local network. No Home Assistant required!</p>
+
+              <div class="form-group">
+                <label for="hue-enabled">Integration Status</label>
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="hue-enabled" checked>
+                  <label for="hue-enabled">Enable Direct Philips Hue Bridge Control</label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                  <label for="hue-ip" style="margin-bottom: 0;">Hue Bridge IP Address</label>
+                  <button id="btn-discover-hue" class="btn btn-xs btn-outline">🔍 Auto-Detect IP</button>
+                </div>
+                <input type="text" id="hue-ip" class="form-control" value="192.168.1.50" placeholder="e.g. 192.168.1.50">
+                <small class="field-hint">Find your IP in the Philips Hue app: Settings ➔ Bridge Settings ➔ Network Settings.</small>
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                  <label for="hue-user" style="margin-bottom: 0;">Hue API App Key / Username</label>
+                  <button id="btn-pair-hue" class="btn btn-xs btn-primary">🔘 Pair Bridge (Press Button)</button>
+                </div>
+                <input type="password" id="hue-user" class="form-control" value="sample_hue_api_username" placeholder="Hue Application Key">
+                <div id="hue-pair-feedback" class="field-hint" style="color: var(--accent-gold); margin-top: 0.4rem; display: none;"></div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group col-half">
+                  <label for="hue-target-type">Target Type</label>
+                  <select id="hue-target-type" class="form-control">
+                    <option value="group">Entertainment Group / Room</option>
+                    <option value="light">Individual Light</option>
+                  </select>
+                </div>
+                <div class="form-group col-half">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                    <label for="hue-target-id" style="margin-bottom: 0;">Target ID / Room</label>
+                    <button id="btn-fetch-rooms" class="btn btn-xs btn-ghost" style="padding: 0 0.2rem;">🔄 Refresh</button>
+                  </div>
+                  <input type="text" id="hue-target-id" class="form-control" value="1" placeholder="1">
+                  <select id="hue-room-select" class="form-control" style="display: none; margin-top: 0.4rem;"></select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="hue-alert-strobe" checked>
+                  <label for="hue-alert-strobe">Use Hue Hardware Alert Strobe (<code>lselect</code> 15-second breathing flash)</label>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button id="btn-save-hue" class="btn btn-primary">Save Hue Settings</button>
+                <button id="btn-test-hue" class="btn btn-secondary">⚡ Test Hue Goal Flash</button>
+              </div>
+            </div>
+
+            <div class="hue-guide-col">
+              <h4>Easy 2-Step Philips Hue Setup</h4>
+              <ol class="guide-steps">
+                <li>
+                  <strong>Enter or Auto-Detect your Hue Bridge IP:</strong><br>
+                  Click <strong>🔍 Auto-Detect IP</strong> or open the <strong>Philips Hue App</strong> on your iPhone ➔ <em>Settings</em> ➔ <em>Bridge settings</em> ➔ <em>Network settings</em> to find your Bridge's local IP address (e.g. <code>192.168.1.50</code>).
+                </li>
+                <li>
+                  <strong>Pair with the Bridge:</strong><br>
+                  Walk over to your physical Philips Hue Bridge and <strong>press the large round button</strong> on top. Then immediately click <strong>🔘 Pair Bridge</strong> above within 30 seconds. The app will automatically generate and save your secure Hue Application Key!
+                </li>
+                <li>
+                  <strong>Select your Room / Entertainment Zone:</strong><br>
+                  The app will list all your Hue rooms (Living Room, TV Area, etc.). Pick the room you want to light up during game day!
+                </li>
+              </ol>
+
+              <div style="background: rgba(255, 198, 47, 0.1); border: 1px solid rgba(255, 198, 47, 0.3); padding: 0.85rem; border-radius: 8px; margin-top: 1rem; font-size: 0.82rem;">
+                🍏 <strong>Apple Home Hub Note:</strong> Because your Philips Hue lights are already synced with your Apple Home hub, any changes triggered here are automatically reflected throughout your Apple Home ecosystem!
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Home Assistant (Optional) -->
+        <div class="tab-panel" id="tab-home-assistant">
+
+          <div class="integration-grid">
+            <div class="config-form-col">
+              <h3>Home Assistant Configuration (Optional)</h3>
+              <p class="panel-desc">Optional: If you use Home Assistant alongside Philips Hue, you can configure webhook triggers here.</p>
 
               <div class="form-group">
                 <label for="ha-enabled">Integration Status</label>
                 <div class="checkbox-toggle">
-                  <input type="checkbox" id="ha-enabled" checked>
+                  <input type="checkbox" id="ha-enabled">
                   <label for="ha-enabled">Enable Home Assistant Integration</label>
                 </div>
               </div>
@@ -388,11 +477,10 @@
               <div class="form-group" id="group-ha-token" style="display: none;">
                 <label for="ha-token">Long-Lived Access Token</label>
                 <input type="password" id="ha-token" class="form-control" placeholder="Bearer eyJhbGciOi...">
-                <small class="field-hint">Generated in HA Profile &gt; Long-Lived Access Tokens.</small>
               </div>
 
               <div class="form-actions">
-                <button id="btn-save-ha" class="btn btn-primary">Save Settings</button>
+                <button id="btn-save-ha" class="btn btn-primary">Save HA Settings</button>
                 <button id="btn-test-ha" class="btn btn-secondary">Test HA Trigger</button>
               </div>
             </div>
@@ -405,74 +493,6 @@
               </div>
               <p class="yaml-desc">Copy and paste this into your Home Assistant <code>automations.yaml</code> file or Automation UI editor:</p>
               <pre class="code-block" id="ha-yaml-block"><code>Loading YAML snippet...</code></pre>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 2: Philips Hue Bridge Direct -->
-        <div class="tab-panel" id="tab-philips-hue">
-          <div class="integration-grid">
-            <div class="config-form-col">
-              <h3>Philips Hue Bridge Direct Connection</h3>
-              <p class="panel-desc">Direct local REST communication with your Philips Hue Bridge without requiring Home Assistant.</p>
-
-              <div class="form-group">
-                <label for="hue-enabled">Integration Status</label>
-                <div class="checkbox-toggle">
-                  <input type="checkbox" id="hue-enabled" checked>
-                  <label for="hue-enabled">Enable Direct Philips Hue Bridge</label>
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label for="hue-ip">Hue Bridge IP Address</label>
-                <input type="text" id="hue-ip" class="form-control" value="192.168.1.50" placeholder="192.168.1.xxx">
-                <small class="field-hint">Find your IP in the Hue app: Settings &gt; Bridge settings &gt; IP Address.</small>
-              </div>
-
-              <div class="form-group">
-                <label for="hue-user">Hue API Username / App Key</label>
-                <input type="password" id="hue-user" class="form-control" value="sample_hue_api_username" placeholder="Hue Application Key">
-                <small class="field-hint">Press the physical button on your bridge, then click Generate Key below.</small>
-              </div>
-
-              <div class="form-row">
-                <div class="form-group col-half">
-                  <label for="hue-target-type">Target Type</label>
-                  <select id="hue-target-type" class="form-control">
-                    <option value="group">Entertainment Group / Room</option>
-                    <option value="light">Individual Light</option>
-                  </select>
-                </div>
-                <div class="form-group col-half">
-                  <label for="hue-target-id">Target ID</label>
-                  <input type="text" id="hue-target-id" class="form-control" value="1" placeholder="1">
-                </div>
-              </div>
-
-              <div class="form-group">
-                <div class="checkbox-toggle">
-                  <input type="checkbox" id="hue-alert-strobe" checked>
-                  <label for="hue-alert-strobe">Use Hue Hardware Alert Strobe (<code>lselect</code> 15-second breathing flash)</label>
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button id="btn-save-hue" class="btn btn-primary">Save Hue Settings</button>
-                <button id="btn-test-hue" class="btn btn-secondary">Test Hue Flash</button>
-              </div>
-            </div>
-
-            <div class="hue-guide-col">
-              <h4>Quick Philips Hue Setup Guide</h4>
-              <ol class="guide-steps">
-                <li><strong>Locate Bridge IP:</strong> Open the Philips Hue iOS/Android app &gt; <em>Settings</em> &gt; <em>Bridge Settings</em> &gt; <em>Network settings</em>.</li>
-                <li><strong>Generate App Key:</strong>
-                  <p>Press the big circle button on top of your physical Hue Bridge, then within 30 seconds run:</p>
-                  <pre class="inline-code">curl -X POST http://&lt;BRIDGE_IP&gt;/api -d '{"devicetype":"game_day_lights#mac"}'</pre>
-                </li>
-                <li><strong>Enter Target Group or Light:</strong> Target group <code>1</code> usually controls your first room or entertainment zone.</li>
-              </ol>
             </div>
           </div>
         </div>

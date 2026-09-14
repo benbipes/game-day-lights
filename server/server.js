@@ -381,7 +381,45 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // POST /api/hue/discover
+  if (pathname === '/api/hue/discover' && req.method === 'POST') {
+    try {
+      const result = await lightService.discoverHueBridges();
+      return sendJson(res, 200, result);
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+  }
+
+  // POST /api/hue/pair
+  if (pathname === '/api/hue/pair' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const bridgeIp = body.bridgeIp || userConfig.philipsHue.bridgeIp;
+      const result = await lightService.pairHueBridge(bridgeIp);
+      if (result.success) {
+        saveConfigToFile(userConfig);
+      }
+      return sendJson(res, 200, result);
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+  }
+
+  // GET /api/hue/rooms
+  if (pathname === '/api/hue/rooms' && req.method === 'GET') {
+    try {
+      const bridgeIp = userConfig.philipsHue.bridgeIp;
+      const username = userConfig.philipsHue.username;
+      const result = await lightService.getHueRooms(bridgeIp, username);
+      return sendJson(res, 200, result);
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+  }
+
   // GET /api/config
+
   if (pathname === '/api/config' && req.method === 'GET') {
     return sendJson(res, 200, { config: userConfig });
   }
