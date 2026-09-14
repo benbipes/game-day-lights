@@ -1,5 +1,4 @@
-// lightService.js - Philips Hue and Home Assistant Lighting Controller & Sequence Orchestrator
-
+import https from 'node:https';
 import { TEAMS } from './config.js';
 
 // Philips Hue Bridge uses internal self-signed TLS certificates on local private LAN (RFC 1918)
@@ -154,23 +153,51 @@ export class LightService {
     }
   }
 
-  // Resilient Hue Bridge fetcher: tries HTTPS (required by modern Hue firmware) then HTTP
+  // Resilient Hue Bridge fetcher: tries HTTP first (fast native port 80 for local REST v1),
+  // then falls back to HTTPS with self-signed certificate acceptance (RFC 1918 LAN)
   async fetchHue(cleanIp, path, options = {}) {
     const timeout = options.timeout || 4000;
     try {
-      return await fetch(`https://${cleanIp}${path}`, {
+      return await fetch(`http://${cleanIp}${path}`, {
         ...options,
         signal: AbortSignal.timeout(timeout)
       });
-    } catch (httpsErr) {
-      try {
-        return await fetch(`http://${cleanIp}${path}`, {
-          ...options,
-          signal: AbortSignal.timeout(timeout)
+    } catch (httpErr) {
+      return await new Promise((resolve, reject) => {
+        const req = https.request(`https://${cleanIp}${path}`, {
+          method: options.method || 'GET',
+          headers: options.headers || {},
+          rejectUnauthorized: false,
+          timeout
+        }, (res) => {
+          let data = '';
+          res.on('data', chunk => { data += chunk; });
+          res.on('end', () => {
+            resolve({
+              ok: res.statusCode >= 200 && res.statusCode < 300,
+              status: res.statusCode,
+              json: async () => {
+                try {
+                  return JSON.parse(data || '{}');
+                } catch (parseErr) {
+                  return { error: 'Invalid JSON response from Hue Bridge' };
+                }
+              },
+              text: async () => data
+            });
+          });
         });
-      } catch (httpErr) {
-        throw httpsErr;
-      }
+        req.on('error', (sslErr) => {
+          reject(new Error(`Could not reach Hue Bridge at ${cleanIp}: ${httpErr.message} (HTTPS fallback: ${sslErr.message})`));
+        });
+        req.on('timeout', () => {
+          req.destroy(new Error(`Hue Bridge connection timed out after ${timeout}ms`));
+        });
+        if (options.body) {
+          req.write(typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+        }
+        req.end();
+      });
     }
   }
 
@@ -381,9 +408,20 @@ export class LightService {
       const res = await this.fetchHue(cleanIp, `/api/${username}/groups`, { timeout: 5000 });
       const groups = await res.json();
       const rooms = [];
-      if (typeof groups === 'object' && !groups.error) {
+      if (Array.isArray(groups)) {
+        if (groups[0]?.error) {
+          return { success: false, error: groups[0].error.description || 'Hue Bridge returned an error' };
+        }
+      } else if (groups && typeof groups === 'object') {
         for (const [id, grp] of Object.entries(groups)) {
-          rooms.push({ id, name: grp.name, type: grp.type, lights: grp.lights || [] });
+          if (grp && typeof grp === 'object' && grp.name) {
+            rooms.push({
+              id: String(id),
+              name: grp.name,
+              type: grp.type || 'Room',
+              lights: Array.isArray(grp.lights) ? grp.lights : []
+            });
+          }
         }
       }
       return { success: true, rooms };

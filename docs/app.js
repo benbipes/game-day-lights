@@ -1686,7 +1686,8 @@ function populateRoomsDropdown(rooms) {
   renderRoomsGrid(rooms);
 }
 
-async function fetchHueRooms() {
+async function fetchHueRooms(arg = false) {
+  const isExplicitClick = arg === true || (arg && typeof arg === 'object' && arg.type === 'click');
   const ipEl = document.getElementById('hue-ip');
   const userEl = document.getElementById('hue-user');
   const ip = (ipEl?.value || state.config.philipsHue?.bridgeIp || '').trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
@@ -1694,11 +1695,14 @@ async function fetchHueRooms() {
   const btnFetchRooms = document.getElementById('btn-fetch-rooms');
 
   if (!username) {
-    alert('Please enter or pair your Hue API App Key / Username first.');
+    if (isExplicitClick) {
+      alert('Please enter or pair your Hue API App Key / Username first.');
+    }
     return;
   }
 
   if (!isLocalEnvironment()) {
+    if (!isExplicitClick) return; // Don't pop prompt on initial background load in hosted env
     const userChoice = prompt(
       `🌐 On GitHub Pages, web browsers block connecting directly to local Wi-Fi devices.\n\n` +
       `Options to load your rooms:\n\n` +
@@ -1712,7 +1716,7 @@ async function fetchHueRooms() {
         const rooms = [];
         if (typeof groups === 'object' && !groups.error) {
           for (const [id, grp] of Object.entries(groups)) {
-            rooms.push({ id, name: grp.name, type: grp.type || 'Room', lights: grp.lights || [] });
+            rooms.push({ id: String(id), name: grp.name, type: grp.type || 'Room', lights: grp.lights || [] });
           }
         }
         if (rooms.length > 0) {
@@ -1738,7 +1742,11 @@ async function fetchHueRooms() {
       setTimeout(() => { if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms'; }, 2500);
     } else {
       const msg = res.data?.error || res.error || 'Could not reach bridge';
-      alert(`Could not load rooms: ${msg}\nEnsure your Hue Bridge IP and Username are correct.`);
+      if (isExplicitClick) {
+        alert(`Could not load rooms: ${msg}\nEnsure your Hue Bridge IP and Username are correct.`);
+      } else {
+        console.warn(`[Hue] Background room fetch notice: ${msg}`);
+      }
       if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
     }
   } catch (e) {
