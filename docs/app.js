@@ -722,6 +722,52 @@ function loadSavedConfig() {
   }
 }
 
+// Environment Detection & Safe Network Fetching
+function isLocalEnvironment() {
+  const h = window.location.hostname;
+  return h === 'localhost' ||
+         h === '127.0.0.1' ||
+         h === '::1' ||
+         h.endsWith('.local') ||
+         h.startsWith('192.168.') ||
+         h.startsWith('10.') ||
+         window.location.port === '3300';
+}
+
+async function safeFetchJson(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text().catch(() => '');
+      return {
+        ok: false,
+        status: res.status,
+        isJson: false,
+        text,
+        data: null,
+        error: `Server returned non-JSON response (${res.status} ${res.statusText || ''})`
+      };
+    }
+    const data = await res.json().catch(() => null);
+    return {
+      ok: res.ok,
+      status: res.status,
+      isJson: true,
+      data,
+      error: res.ok ? null : (data?.message || data?.error || `Request failed with status ${res.status}`)
+    };
+  } catch (netErr) {
+    return {
+      ok: false,
+      status: 0,
+      isJson: false,
+      data: null,
+      error: netErr.message || 'Network request failed'
+    };
+  }
+}
+
 async function saveConfig(partial = null) {
   if (partial) {
     state.config = {
@@ -742,12 +788,7 @@ async function saveConfig(partial = null) {
 
   // Also send to backend server if running in local server mode
   const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-  const isLocal = window.location.hostname === 'localhost' ||
-                  window.location.hostname === '127.0.0.1' ||
-                  window.location.hostname.startsWith('192.168.') ||
-                  window.location.hostname.startsWith('10.');
-
-  if (isHttp && isLocal) {
+  if (isHttp && isLocalEnvironment()) {
     try {
       await fetch('/api/config', {
         method: 'POST',
@@ -762,17 +803,12 @@ async function saveConfig(partial = null) {
 
 async function syncServerConfig() {
   const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-  const isLocal = window.location.hostname === 'localhost' ||
-                  window.location.hostname === '127.0.0.1' ||
-                  window.location.hostname.startsWith('192.168.') ||
-                  window.location.hostname.startsWith('10.');
-
-  if (!isHttp || !isLocal) return;
+  if (!isHttp || !isLocalEnvironment()) return;
 
   try {
-    const res = await fetch('/api/config');
-    if (res.ok) {
-      const data = await res.json();
+    const res = await safeFetchJson('/api/config');
+    if (res.ok && res.data && res.data.config) {
+      const data = res.data;
       if (data && data.config) {
         const localHue = state.config.philipsHue || {};
         const serverHue = data.config.philipsHue || {};
@@ -1097,12 +1133,8 @@ async function selectTeam(teamId) {
 // Safe SSE Connection
 function initSse() {
   const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-  const isLocal = window.location.hostname === 'localhost' || 
-                  window.location.hostname === '127.0.0.1' ||
-                  window.location.hostname.startsWith('192.168.') ||
-                  window.location.hostname.startsWith('10.');
 
-  if (!isHttp || !isLocal) {
+  if (!isHttp || !isLocalEnvironment()) {
     state.isStandalone = true;
     updateThemeColors();
     return;
@@ -1475,10 +1507,31 @@ function setupEventListeners() {
     btnDiscoverHue.addEventListener('click', async () => {
       btnDiscoverHue.textContent = 'Searching...';
       try {
-        const res = await fetch('/api/hue/discover', { method: 'POST' });
-        const data = await res.json();
-        if (data.success && data.bridges && data.bridges.length > 0) {
-          const detectedIp = data.bridges[0].ip;
+        let bridges = null;
+        if (isLocalEnvironment()) {
+          const res = await safeFetchJson('/api/hue/discover', { method: 'POST' });
+          if (res.ok && res.data && res.data.bridges && res.data.bridges.length > 0) {
+            bridges = res.data.bridges;
+          }
+        }
+
+        // Direct cloud discovery fallback (supports CORS, works on both GitHub Pages & local server)
+        if (!bridges || bridges.length === 0) {
+          try {
+            const cloudRes = await fetch('https://discovery.meethue.com/', { signal: AbortSignal.timeout(5000) });
+            if (cloudRes.ok) {
+              const list = await cloudRes.json();
+              if (Array.isArray(list) && list.length > 0) {
+                bridges = list.map(b => ({ id: b.id, ip: b.internalipaddress }));
+              }
+            }
+          } catch (e) {
+            console.warn('Direct Hue cloud discovery error:', e);
+          }
+        }
+
+        if (bridges && bridges.length > 0) {
+          const detectedIp = bridges[0].ip;
           const ipEl = document.getElementById('hue-ip');
           if (ipEl) ipEl.value = detectedIp;
           await saveConfig({
@@ -1489,7 +1542,7 @@ function setupEventListeners() {
           });
           alert(`Found Hue Bridge at: ${detectedIp}\nBridge IP saved to settings!`);
         } else {
-          alert('Could not auto-detect Bridge via cloud. Please enter the Bridge IP shown in your Hue iPhone app.');
+          alert('Could not auto-detect Bridge via cloud. Please enter the Bridge IP shown in your Hue iPhone app (Settings ➔ Bridge settings ➔ Network settings).');
         }
       } catch (err) {
         alert('Could not reach discovery service. Please enter the Bridge IP manually.');
@@ -1505,51 +1558,101 @@ function setupEventListeners() {
   if (btnPairHue) {
     btnPairHue.addEventListener('click', async () => {
       const ipEl = document.getElementById('hue-ip');
-      const ip = ipEl ? ipEl.value.trim() : '';
+      const rawIp = ipEl ? ipEl.value.trim() : '';
+      const ip = rawIp.replace(/^https?:\/\//, '').replace(/\/+$/, '');
       if (!ip) {
-        alert('Please enter your Hue Bridge IP first.');
+        alert('Please enter your Hue Bridge IP address first (e.g. 192.168.1.50).');
         return;
       }
       btnPairHue.textContent = 'Pairing...';
       if (pairFeedback) {
         pairFeedback.style.display = 'block';
-        pairFeedback.textContent = 'Contacting Hue Bridge...';
+        pairFeedback.style.color = '#e2e8f0';
+        pairFeedback.innerHTML = '<span>⏳ Contacting Hue Bridge...</span>';
       }
-      try {
-        const res = await fetch('/api/hue/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bridgeIp: ip })
-        });
-        const data = await res.json();
-        if (data.success) {
-          const userEl = document.getElementById('hue-user');
-          if (userEl) userEl.value = data.username;
-          if (pairFeedback) {
-            pairFeedback.style.color = '#4ade80';
-            pairFeedback.textContent = '✅ Bridge paired successfully! Application Key saved.';
-          }
-          await saveConfig({
-            philipsHue: {
-              ...state.config.philipsHue,
-              bridgeIp: ip,
-              username: data.username
-            }
+
+      // Local Server vs Public GitHub Pages handling
+      if (isLocalEnvironment()) {
+        try {
+          const res = await safeFetchJson('/api/hue/pair', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bridgeIp: ip })
           });
-          fetchHueRooms();
-        } else {
-          if (pairFeedback) {
-            pairFeedback.style.color = '#fbbf24';
-            pairFeedback.textContent = data.message || data.error || 'Failed to pair with bridge.';
+
+          if (res.ok && res.data && res.data.success) {
+            const userEl = document.getElementById('hue-user');
+            if (userEl) userEl.value = res.data.username;
+            if (pairFeedback) {
+              pairFeedback.style.color = '#4ade80';
+              pairFeedback.innerHTML = '✅ <strong>Bridge paired successfully!</strong> Application Key saved.';
+            }
+            await saveConfig({
+              philipsHue: {
+                ...state.config.philipsHue,
+                bridgeIp: ip,
+                username: res.data.username
+              }
+            });
+            fetchHueRooms();
+          } else if (res.data && res.data.linkButtonRequired) {
+            if (pairFeedback) {
+              pairFeedback.style.color = '#fbbf24';
+              pairFeedback.innerHTML = '🔘 <strong>Link button not pressed!</strong> Press the large round button on top of your Hue Bridge, then click <strong>Pair Bridge</strong> again within 30 seconds.';
+            }
+          } else {
+            if (pairFeedback) {
+              pairFeedback.style.color = '#ef4444';
+              pairFeedback.innerHTML = `⚠️ <strong>Pairing failed:</strong> ${escapeHtml(res.error || res.data?.error || res.data?.message || 'Could not connect to bridge')}`;
+            }
           }
+        } catch (err) {
+          if (pairFeedback) {
+            pairFeedback.style.color = '#ef4444';
+            pairFeedback.innerHTML = '⚠️ <strong>Error connecting:</strong> ' + escapeHtml(err.message || 'Unknown network error');
+          }
+        } finally {
+          btnPairHue.textContent = '🔘 Pair Bridge (Press Button)';
         }
-      } catch (err) {
-        if (pairFeedback) {
-          pairFeedback.style.color = '#ef4444';
-          pairFeedback.textContent = 'Error connecting to bridge: ' + err.message;
-        }
-      } finally {
+      } else {
+        // GitHub Pages / External HTTPS mode:
+        // Browsers block public HTTPS sites from fetching local private LAN IPs (Mixed Content & PNA)
         btnPairHue.textContent = '🔘 Pair Bridge (Press Button)';
+        if (pairFeedback) {
+          pairFeedback.style.color = '';
+          pairFeedback.innerHTML = `
+            <div style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 8px; padding: 1rem; margin-top: 0.5rem; text-align: left;">
+              <div style="display: flex; align-items: center; gap: 0.4rem; color: #fbbf24; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;">
+                <span>🌐</span> <span>Browser Security Restriction on GitHub Pages</span>
+              </div>
+              <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0 0 0.75rem 0; line-height: 1.45;">
+                You are viewing this site on GitHub Pages (public HTTPS). Web browsers strictly block public websites from connecting directly to local home devices (<code style="background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; color: #38bdf8;">http://${escapeHtml(ip)}</code>).
+              </p>
+              
+              <div style="margin-bottom: 0.85rem; padding-bottom: 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size: 0.85rem; font-weight: 600; color: #4ade80; margin-bottom: 0.25rem;">Option 1: Recommended (Automatic 1-Click Pairing)</div>
+                <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 0.4rem 0;">
+                  Your local Mac server is running right now with direct access to your home network:
+                </p>
+                <a href="http://localhost:3300" target="_blank" class="btn btn-xs btn-primary" style="display: inline-block; text-decoration: none; padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+                  🚀 Open http://localhost:3300
+                </a>
+              </div>
+
+              <div>
+                <div style="font-size: 0.85rem; font-weight: 600; color: #60a5fa; margin-bottom: 0.25rem;">Option 2: Pair via Mac Terminal (Stay on GitHub Pages)</div>
+                <p style="font-size: 0.78rem; color: #94a3b8; margin: 0 0 0.35rem 0;">
+                  1. Press the big round button on top of your Hue Bridge.<br>
+                  2. Open Terminal on your Mac and run:
+                </p>
+                <pre style="background: #0f172a; padding: 0.5rem 0.6rem; border-radius: 6px; font-size: 0.73rem; overflow-x: auto; color: #38bdf8; margin: 0 0 0.4rem 0; border: 1px solid rgba(255,255,255,0.1);"><code>curl -s -X POST http://${escapeHtml(ip)}/api -d '{"devicetype":"game_day_lights#mac"}'</code></pre>
+                <p style="font-size: 0.75rem; color: #94a3b8; margin: 0;">
+                  3. Copy the <code style="color: #4ade80;">"username"</code> value from the response, paste it into <strong>Hue API App Key</strong> above, and click <strong>Save Hue Settings</strong>.
+                </p>
+              </div>
+            </div>
+          `;
+        }
       }
     });
   }
@@ -1557,8 +1660,10 @@ function setupEventListeners() {
   // Fetch Rooms
   async function fetchHueRooms() {
     try {
-      const res = await fetch('/api/hue/rooms');
-      const data = await res.json();
+      if (!isLocalEnvironment()) return;
+      const res = await safeFetchJson('/api/hue/rooms');
+      if (!res.ok || !res.data) return;
+      const data = res.data;
       const select = document.getElementById('hue-room-select');
       if (select && data.success && data.rooms && data.rooms.length > 0) {
         select.innerHTML = '<option value="">-- Select Your Room / Group --</option>';
@@ -1723,19 +1828,14 @@ function setupEventListeners() {
 // Fetch Initial Teams Data
 async function loadTeams() {
   const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-  if (!isHttp || !isLocal) return;
+  if (!isHttp || !isLocalEnvironment()) return;
 
   try {
-    const res = await fetch('/api/teams');
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.teams) {
-        state.teams = data.teams;
-        updateThemeColors();
-        renderScoreboard();
-      }
+    const res = await safeFetchJson('/api/teams');
+    if (res.ok && res.data && res.data.teams) {
+      state.teams = res.data.teams;
+      updateThemeColors();
+      renderScoreboard();
     }
   } catch (err) {
     // Keep client-side fallback
@@ -1760,6 +1860,12 @@ function initApp() {
   loadTeams();
   syncServerConfig();
   initSse();
+
+  // Show local server guidance banner if viewing on GitHub Pages / remote HTTPS
+  if (!isLocalEnvironment()) {
+    const ghNotice = document.getElementById('hue-ghpages-notice');
+    if (ghNotice) ghNotice.style.display = 'block';
+  }
 }
 
 if (document.readyState === 'loading') {
