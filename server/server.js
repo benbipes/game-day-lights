@@ -303,7 +303,7 @@ const server = http.createServer(async (req, res) => {
       }
       userConfig.general.activeTeam = teamId;
       saveConfigToFile(userConfig);
-      await lightService.setAmbientLighting(teamId);
+      await lightService.setAmbientLighting(teamId, false);
       return sendJson(res, 200, {
         success: true,
         teamId,
@@ -395,12 +395,12 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // POST /api/test-ambient
+  // POST /api/test-ambient (Restore lights to prior state)
   if (pathname === '/api/test-ambient' && req.method === 'POST') {
     try {
       const body = await parseJsonBody(req);
       const teamId = body.teamId || lightService.currentTeamId;
-      await lightService.setAmbientLighting(teamId);
+      await lightService.endCelebration();
       return sendJson(res, 200, { success: true, teamId });
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
@@ -479,6 +479,23 @@ const server = http.createServer(async (req, res) => {
       lightService.updateConfig(userConfig);
       broadcastSse('config_update', { config: userConfig });
       return sendJson(res, 200, { success: true, config: userConfig });
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+  }
+
+  // POST /api/system/toggle
+  if (pathname === '/api/system/toggle' && req.method === 'POST') {
+    try {
+      const body = await parseJsonBody(req);
+      const currentVal = userConfig.general.systemEnabled !== false;
+      const newVal = typeof body.systemEnabled === 'boolean' ? body.systemEnabled : !currentVal;
+      userConfig.general.systemEnabled = newVal;
+      saveConfigToFile(userConfig);
+      lightService.updateConfig(userConfig);
+      broadcastSse('config_update', { config: userConfig });
+      broadcastSse('state_update', { systemEnabled: newVal });
+      return sendJson(res, 200, { success: true, systemEnabled: newVal });
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
     }

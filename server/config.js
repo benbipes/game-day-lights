@@ -200,6 +200,7 @@ export const DEFAULT_USER_CONFIG = {
   },
   // General options
   general: {
+    systemEnabled: true,
     activeTeam: 'canes',
     ambientBrightness: 220,
     celebrationBrightness: 254,

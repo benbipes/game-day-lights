@@ -125,12 +125,17 @@ export class LightService {
     this.stateListeners.push(fn);
   }
 
+  isSystemActive() {
+    return this.config?.general?.systemEnabled !== false;
+  }
+
   notifyStateChange(extraData = {}) {
     const state = {
       mode: this.currentMode,
       activeTeam: this.currentTeamId,
       currentColor: this.currentLightColor,
       isCelebrating: this.currentMode === 'celebration',
+      systemEnabled: this.isSystemActive(),
       ...extraData
     };
     for (const fn of this.stateListeners) {
@@ -154,8 +159,15 @@ export class LightService {
   }
 
   updateConfig(newConfig) {
+    const wasActive = this.isSystemActive();
     this.config = { ...this.config, ...newConfig };
-    this.addLog('System', 'CONFIG_UPDATE', 'Integration settings updated');
+    const nowActive = this.isSystemActive();
+
+    // If system was just switched to Standby while celebrating, immediately halt celebration and restore lights
+    if (wasActive && !nowActive && this.currentMode === 'celebration') {
+      this.endCelebration();
+    }
+    this.addLog('System', 'CONFIG_UPDATE', `System settings updated (${nowActive ? 'System Active' : 'System Standby'})`);
   }
 
   // --- External Integrations: Home Assistant & Philips Hue ---
@@ -590,7 +602,7 @@ export class LightService {
       dispatched: dispatchToHardware
     });
 
-    if (!dispatchToHardware) return;
+    if (!dispatchToHardware || !this.isSystemActive()) return;
 
     // 1. Home Assistant Webhook
     this.dispatchHomeAssistantWebhook({
@@ -643,6 +655,15 @@ export class LightService {
     const activeId = teamId || this.currentTeamId;
     const team = TEAMS[activeId];
     if (!team) return;
+
+    if (!this.isSystemActive()) {
+      this.addLog('Lighting', 'CELEBRATION_BYPASSED', {
+        reason: 'System is in Standby mode (master toggle off)',
+        team: team.name,
+        event: scoreEvent
+      });
+      return { bypassed: true, reason: 'system_disabled' };
+    }
 
     this.currentTeamId = activeId;
     const wasAlreadyCelebrating = this.currentMode === 'celebration';

@@ -599,6 +599,9 @@ function initElements() {
     statusLabel: document.getElementById('status-label'),
     systemStatusIndicator: document.getElementById('system-status-indicator'),
     headerBulbIndicator: document.getElementById('header-bulb-indicator'),
+    btnMasterSystemToggle: document.getElementById('btn-master-system-toggle'),
+    masterSystemLabel: document.getElementById('master-system-label'),
+    modalSystemMaster: document.getElementById('modal-system-master'),
     btnSoundToggle: document.getElementById('btn-sound-toggle'),
     soundIcon: document.getElementById('sound-icon'),
     soundLabel: document.getElementById('sound-label'),
@@ -937,6 +940,8 @@ function renderConfigForms() {
   if (huePerBulbEl) huePerBulbEl.checked = hue.perBulbMultiColor !== false;
   const hueStrobeEl = document.getElementById('hue-strobe-effect');
   if (hueStrobeEl) hueStrobeEl.value = hue.strobeEffect || 'alternating';
+  const modalMasterEl = document.getElementById('modal-system-master');
+  if (modalMasterEl) modalMasterEl.checked = state.config?.general?.systemEnabled !== false;
 
   if (Array.isArray(state.cachedHueRooms) && state.cachedHueRooms.length > 0) {
     renderRoomsGrid(state.cachedHueRooms);
@@ -1101,15 +1106,39 @@ function updateThemeColors() {
     }
   }
 
+  const systemEnabled = state.config?.general?.systemEnabled !== false;
+
+  if (elements.btnMasterSystemToggle) {
+    if (systemEnabled) {
+      elements.btnMasterSystemToggle.classList.remove('system-standby');
+      elements.btnMasterSystemToggle.classList.add('system-active');
+      elements.btnMasterSystemToggle.title = 'Click to pause light flashing (Standby/Away mode)';
+      if (elements.masterSystemLabel) elements.masterSystemLabel.textContent = 'System Active';
+    } else {
+      elements.btnMasterSystemToggle.classList.remove('system-active');
+      elements.btnMasterSystemToggle.classList.add('system-standby');
+      elements.btnMasterSystemToggle.title = 'Click to enable light flashing on game day';
+      if (elements.masterSystemLabel) elements.masterSystemLabel.textContent = 'System Standby';
+    }
+  }
+
+  if (elements.modalSystemMaster) {
+    elements.modalSystemMaster.checked = systemEnabled;
+  }
+
   if (elements.statusLabel && elements.strobeModeText) {
     if (state.isCelebrating) {
       elements.statusLabel.textContent = '🚨 CELEBRATION STROBE ACTIVE';
       elements.strobeModeText.textContent = `${(strobeLabels[strobeEffect] || 'STROBE').toUpperCase()} ACTIVE`;
       elements.strobeModeText.style.color = '#ffc62f';
+    } else if (!systemEnabled) {
+      elements.statusLabel.textContent = '⏸️ System Standby (Lights Muted)';
+      elements.strobeModeText.textContent = 'STANDBY / AWAY';
+      elements.strobeModeText.style.color = '#fbbf24';
     } else {
       const modeSuffix = state.isStandalone ? ' (Standalone)' : '';
-      elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'}${modeSuffix}`;
-      elements.strobeModeText.textContent = perBulb ? 'MULTI-BULB AMBIENT' : 'AMBIENT SYNCED';
+      elements.statusLabel.textContent = `Lights Armed: ${team?.name || 'Canes'}${modeSuffix}`;
+      elements.strobeModeText.textContent = perBulb ? 'MULTI-BULB AMBIENT' : 'LIGHTS ARMED';
       elements.strobeModeText.style.color = 'var(--team-primary)';
     }
   }
@@ -1422,6 +1451,23 @@ let localFlashInterval = null;
 function runLocalCelebration(teamId, eventName = 'GOAL') {
   const team = state.teams[teamId];
   if (!team) return;
+
+  const systemEnabled = state.config?.general?.systemEnabled !== false;
+  if (!systemEnabled) {
+    if (elements.matchLastEvent) {
+      const orig = elements.matchLastEvent.textContent;
+      elements.matchLastEvent.textContent = `⏸️ Score Event (${eventName}) — Light flashing suppressed (System in Standby)`;
+      elements.matchLastEvent.style.color = '#fbbf24';
+      setTimeout(() => {
+        if (elements.matchLastEvent) {
+          elements.matchLastEvent.textContent = orig;
+          elements.matchLastEvent.style.color = '';
+        }
+      }, 4000);
+    }
+    return;
+  }
+
   state.isCelebrating = true;
   updateThemeColors();
 
@@ -1639,12 +1685,14 @@ function initSse() {
             ...state.config,
             ...data.config,
             homeAssistant: { ...state.config.homeAssistant, ...(data.config.homeAssistant || {}) },
-            philipsHue: { ...state.config.philipsHue, ...(data.config.philipsHue || {}) }
+            philipsHue: { ...state.config.philipsHue, ...(data.config.philipsHue || {}) },
+            general: { ...state.config.general, ...(data.config.general || {}) }
           };
           try {
             localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
           } catch (err) {}
           renderConfigForms();
+          updateThemeColors();
           fetchHaYaml();
         }
       } catch (err) {}
@@ -1658,6 +1706,12 @@ function initSse() {
         if (data.mode) state.mode = data.mode;
         state.isCelebrating = !!data.isCelebrating;
         if (data.match) state.match = data.match;
+
+        if (typeof data.systemEnabled === 'boolean') {
+          if (!state.config) state.config = {};
+          if (!state.config.general) state.config.general = {};
+          state.config.general.systemEnabled = data.systemEnabled;
+        }
 
         if (data.newLog) {
           state.logs.unshift(data.newLog);
@@ -1896,6 +1950,50 @@ function setupEventListeners() {
         const teamId = card.getAttribute('data-team');
         if (teamId) selectTeam(teamId);
       });
+    });
+  }
+
+  // Master System Toggle Controller
+  async function toggleMasterSystem(explicitVal = null) {
+    const current = state.config?.general?.systemEnabled !== false;
+    const targetVal = explicitVal !== null ? !!explicitVal : !current;
+    if (!state.config) state.config = {};
+    if (!state.config.general) state.config.general = {};
+    state.config.general.systemEnabled = targetVal;
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(state.config));
+    } catch (e) {}
+
+    updateThemeColors();
+
+    try {
+      const res = await fetch('/api/system/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ systemEnabled: targetVal })
+      });
+      const data = await res.json();
+      if (data.success && typeof data.systemEnabled === 'boolean') {
+        state.config.general.systemEnabled = data.systemEnabled;
+        updateThemeColors();
+      }
+    } catch (err) {
+      // Standalone / offline fallback
+    }
+  }
+
+  // Master System Toggle Button
+  if (elements.btnMasterSystemToggle) {
+    elements.btnMasterSystemToggle.addEventListener('click', () => {
+      toggleMasterSystem();
+    });
+  }
+
+  // Modal Master System Toggle
+  if (elements.modalSystemMaster) {
+    elements.modalSystemMaster.addEventListener('change', (e) => {
+      toggleMasterSystem(e.target.checked);
     });
   }
 

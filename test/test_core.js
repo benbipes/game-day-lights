@@ -334,6 +334,59 @@ assert.strictEqual(bulb12.payload.sat, 200, 'Bulb 12 restored prior saturation (
 
 console.log('  ✅ Individual bulb restoration validated: exact power, brightness, ct, and hue/sat restored per fixture!');
 
+// Test 7: Team Selection Hardware Isolation & Master System Toggle (Active vs Standby)
+console.log('▶ Test 7: Team Selection Hardware Isolation & Master System Toggle');
+
+const test7Service = new LightService(DEFAULT_USER_CONFIG);
+let test7Dispatches = [];
+test7Service.dispatchSingleHueTarget = async (cleanIp, username, targetType, targetId, payload) => {
+  test7Dispatches.push({ targetType, targetId, payload });
+  return { success: true };
+};
+test7Service.updateConfig({
+  philipsHue: { enabled: true, bridgeIp: '192.168.1.1', username: 'testuser', targetIds: ['1'] }
+});
+
+// 7a: Team Selection with dispatchToHardware = false leaves lights untouched
+test7Dispatches = [];
+await test7Service.setAmbientLighting('vikings', false);
+assert.strictEqual(test7Service.currentTeamId, 'vikings');
+assert.strictEqual(test7Dispatches.length, 0, 'No hardware light commands sent when selecting a team');
+console.log('  ✅ Team selection hardware isolation verified: lights stay in current state');
+
+// 7b: Default system status is active
+assert.strictEqual(test7Service.isSystemActive(), true, 'Default system status is active');
+
+// 7c: Standby Mode suppresses celebrations & hardware flashing
+test7Service.updateConfig({ general: { systemEnabled: false } });
+assert.strictEqual(test7Service.isSystemActive(), false, 'System successfully set to Standby');
+
+const bypassedResult = await test7Service.triggerCelebration('vols', { type: 'TOUCHDOWN' });
+assert.strictEqual(bypassedResult?.bypassed, true, 'Celebration bypassed in Standby mode');
+assert.strictEqual(bypassedResult?.reason, 'system_disabled');
+assert.strictEqual(test7Service.currentMode, 'ambient', 'Mode remained ambient, did not celebrate');
+assert.strictEqual(test7Dispatches.length, 0, 'Zero light commands sent during standby celebration event');
+
+const bypassedLog = test7Service.logs.find(l => l.type === 'CELEBRATION_BYPASSED');
+assert.ok(bypassedLog, 'Logged CELEBRATION_BYPASSED event in activity log');
+console.log('  ✅ Standby mode verified: score celebration safely bypassed, zero light commands');
+
+// 7d: Switching to Standby mid-celebration immediately halts strobe and restores lights
+test7Service.updateConfig({ general: { systemEnabled: true } });
+await test7Service.triggerCelebration('canes', { type: 'GOAL' });
+assert.strictEqual(test7Service.currentMode, 'celebration', 'Celebration active');
+assert.ok(test7Service.activeHardwareStrobeInterval !== null, 'Strobe loop running');
+
+test7Service.updateConfig({ general: { systemEnabled: false } });
+assert.strictEqual(test7Service.currentMode, 'ambient', 'Celebration immediately aborted on Standby switch');
+assert.strictEqual(test7Service.activeHardwareStrobeInterval, null, 'Hardware strobe loop immediately terminated');
+console.log('  ✅ Mid-celebration Standby abort verified: strobe halted and bulbs restored');
+
+// 7e: Re-enabling system restores full celebration capability
+test7Service.updateConfig({ general: { systemEnabled: true } });
+assert.strictEqual(test7Service.isSystemActive(), true, 'System re-armed to Active');
+console.log('  ✅ Master system toggle cycle verified: Active ➔ Standby ➔ Active');
+
 espnService.stopPolling();
 
 console.log('\n🎉 ALL TESTS PASSED! Game Day Lights core engine is verified and ready.\n');

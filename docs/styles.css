@@ -245,6 +245,68 @@ body::before {
   border-radius: 6px;
 }
 
+/* Master System Toggle Button */
+.btn-master-system {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 1.05rem;
+  border-radius: 9999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.btn-master-system.system-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-master-system.system-active:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.7);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-master-system.system-standby {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.15);
+}
+
+.btn-master-system.system-standby:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.65);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.3);
+  transform: translateY(-1px);
+}
+
+.system-power-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.btn-master-system.system-active .system-power-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulse-ring 2s infinite;
+}
+
+.btn-master-system.system-standby .system-power-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+
 /* Section Headings */
 .section-heading {
   margin-bottom: 1.25rem;
