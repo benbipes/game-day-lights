@@ -2,6 +2,9 @@
 
 import { TEAMS } from './config.js';
 
+// Philips Hue Bridge uses internal self-signed TLS certificates on local private LAN (RFC 1918)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 // RGB to Hue CIE 1931 XY converter
 export function rgbToXy(red, green, blue) {
   let r = red / 255;
@@ -148,6 +151,26 @@ export class LightService {
     }
   }
 
+  // Resilient Hue Bridge fetcher: tries HTTPS (required by modern Hue firmware) then HTTP
+  async fetchHue(cleanIp, path, options = {}) {
+    const timeout = options.timeout || 4000;
+    try {
+      return await fetch(`https://${cleanIp}${path}`, {
+        ...options,
+        signal: AbortSignal.timeout(timeout)
+      });
+    } catch (httpsErr) {
+      try {
+        return await fetch(`http://${cleanIp}${path}`, {
+          ...options,
+          signal: AbortSignal.timeout(timeout)
+        });
+      } catch (httpErr) {
+        throw httpsErr;
+      }
+    }
+  }
+
   async dispatchHueBridge(bodyPayload) {
     const hue = this.config.philipsHue;
     if (!hue || !hue.enabled) return { skipped: true, reason: 'Disabled' };
@@ -156,17 +179,16 @@ export class LightService {
     if (!cleanIp || !hue.username) {
       return { skipped: true, reason: 'Hue Bridge IP or username not configured' };
     }
-    const endpoint = hue.targetType === 'group'
-      ? `http://${cleanIp}/api/${hue.username}/groups/${hue.targetId}/action`
-      : `http://${cleanIp}/api/${hue.username}/lights/${hue.targetId}/state`;
+    const path = hue.targetType === 'group'
+      ? `/api/${hue.username}/groups/${hue.targetId}/action`
+      : `/api/${hue.username}/lights/${hue.targetId}/state`;
 
     const startTime = Date.now();
     try {
-      const res = await fetch(endpoint, {
+      const res = await this.fetchHue(cleanIp, path, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload),
-        signal: AbortSignal.timeout(4000)
+        body: JSON.stringify(bodyPayload)
       });
       const latency = Date.now() - startTime;
       const data = await res.json().catch(() => null);
@@ -181,7 +203,7 @@ export class LightService {
       }, isOk);
       return { success: isOk, data };
     } catch (err) {
-      this.addLog('Philips Hue', 'BRIDGE_ERROR', { endpoint, error: err.message }, false);
+      this.addLog('Philips Hue', 'BRIDGE_ERROR', { path, error: err.message }, false);
       return { success: false, error: err.message };
     }
   }
@@ -206,11 +228,11 @@ export class LightService {
   async pairHueBridge(bridgeIp) {
     const cleanIp = (bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     try {
-      const res = await fetch(`http://${cleanIp}/api`, {
+      const res = await this.fetchHue(cleanIp, '/api', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ devicetype: 'game_day_lights#mac' }),
-        signal: AbortSignal.timeout(5000)
+        timeout: 5000
       });
       const data = await res.json();
       if (Array.isArray(data) && data[0]) {
@@ -241,7 +263,7 @@ export class LightService {
   async getHueRooms(bridgeIp, username) {
     const cleanIp = (bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
     try {
-      const res = await fetch(`http://${cleanIp}/api/${username}/groups`, { signal: AbortSignal.timeout(4000) });
+      const res = await this.fetchHue(cleanIp, `/api/${username}/groups`, { timeout: 5000 });
       const groups = await res.json();
       const rooms = [];
       if (typeof groups === 'object' && !groups.error) {

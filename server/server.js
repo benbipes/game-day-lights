@@ -8,6 +8,9 @@ import { TEAMS, DEFAULT_USER_CONFIG } from './config.js';
 import { LightService } from './lightService.js';
 import { EspnService } from './espnService.js';
 
+// Philips Hue Bridge uses internal self-signed TLS certificates on local private LAN
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
@@ -412,8 +415,8 @@ const server = http.createServer(async (req, res) => {
   // GET /api/hue/rooms
   if (pathname === '/api/hue/rooms' && req.method === 'GET') {
     try {
-      const bridgeIp = (url.searchParams.get('bridgeIp') || userConfig.philipsHue.bridgeIp || '').trim();
-      const username = (url.searchParams.get('username') || userConfig.philipsHue.username || '').trim();
+      const bridgeIp = (parsedUrl.searchParams.get('bridgeIp') || userConfig.philipsHue.bridgeIp || '').trim();
+      const username = (parsedUrl.searchParams.get('username') || userConfig.philipsHue.username || '').trim();
       if (!bridgeIp || !username) {
         return sendJson(res, 400, {
           success: false,
