@@ -42,6 +42,8 @@ export class EspnService {
       matchedKey = 'vikings';
     } else if (rawTeam.includes('liverpool') || rawTeam.includes('lfc') || rawTeam.includes('reds')) {
       matchedKey = 'liverpool';
+    } else if (rawTeam.includes('vols') || rawTeam.includes('tennessee') || rawTeam.includes('volunteer') || rawTeam.includes('ut')) {
+      matchedKey = 'vols';
     }
 
     if (!matchedKey) {
@@ -61,7 +63,7 @@ export class EspnService {
       match.scoreTeam += payload.points;
     } else {
       // Default increment based on sport
-      const isFootball = matchedKey === 'vikings' || matchedKey === 'wolfpack';
+      const isFootball = matchedKey === 'vikings' || matchedKey === 'wolfpack' || matchedKey === 'vols';
       const inc = isFootball ? (eventType.toLowerCase().includes('field') ? 3 : 6) : 1;
       match.scoreTeam += inc;
     }
@@ -122,8 +124,9 @@ export class EspnService {
     const match = this.matches[teamId];
     if (!match) return null;
 
-    const points = options.points || (teamId === 'vikings' || teamId === 'wolfpack' ? 6 : 1);
-    const eventName = options.event || (teamId === 'vikings' || teamId === 'wolfpack' ? 'TOUCHDOWN' : 'GOAL');
+    const isFootball = teamId === 'vikings' || teamId === 'wolfpack' || teamId === 'vols';
+    const points = options.points || (isFootball ? 6 : 1);
+    const eventName = options.event || (isFootball ? 'TOUCHDOWN' : 'GOAL');
     const player = options.player || this.getRandomPlayer(teamId);
 
     match.scoreTeam += points;
@@ -152,7 +155,7 @@ export class EspnService {
     const match = this.matches[teamId];
     if (!match) return null;
 
-    const points = teamId === 'vikings' || teamId === 'wolfpack' ? 3 : 1;
+    const points = (teamId === 'vikings' || teamId === 'wolfpack' || teamId === 'vols') ? 3 : 1;
     match.scoreOpponent += points;
     match.lastEvent = `OPPONENT SCORE (+${points} pts)`;
     match.lastUpdated = new Date().toISOString();
@@ -190,7 +193,8 @@ export class EspnService {
       canes: ['Sebastian Aho', 'Martin Necas', 'Seth Jarvis', 'Teuvo Teravainen', 'Brent Burns'],
       wolfpack: ['KC Concepcion', 'Grayson McCall', 'Jordan Waters', 'Dacari Collins'],
       vikings: ['Justin Jefferson', 'Jordan Addison', 'Aaron Jones', 'T.J. Hockenson'],
-      liverpool: ['Mohamed Salah', 'Luis Diaz', 'Dominik Szoboszlai', 'Darwin Nunez', 'Virgil van Dijk']
+      liverpool: ['Mohamed Salah', 'Luis Diaz', 'Dominik Szoboszlai', 'Darwin Nunez', 'Virgil van Dijk'],
+      vols: ['Nico Iamaleava', 'Squirrel White', 'Dylan Sampson', 'Dont\'e Thornton Jr.', 'Bru McCoy']
     };
     const list = players[teamId] || ['Key Player'];
     return list[Math.floor(Math.random() * list.length)];

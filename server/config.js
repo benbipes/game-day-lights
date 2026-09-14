@@ -159,6 +159,46 @@ export const TEAMS = {
       clock: '82:15',
       lastEvent: 'GOAL: Mohamed Salah (Right footed shot into bottom corner)'
     }
+  },
+
+  vols: {
+    id: 'vols',
+    name: 'Tennessee Volunteers',
+    short: 'Vols',
+    league: 'NCAA',
+    sport: 'College Football',
+    location: 'Knoxville, TN',
+    primaryColor: '#FF8200', // Tennessee Pantone 151 Orange
+    secondaryColor: '#FFFFFF', // White
+    accentColor: '#58595B', // Smokey Gray
+    ambientRgb: [255, 130, 0],
+    ambientXy: [0.609, 0.377],
+    brightness: 254,
+    celebration: {
+      style: 'rocky_top_strobe',
+      colors: [
+        [255, 130, 0],
+        [255, 255, 255],
+        [255, 100, 0],
+        [88, 89, 91]
+      ],
+      durationMs: 14000,
+      flashIntervalMs: 250,
+      audioKey: 'rocky_top',
+      celebrationTitle: 'TOUCHDOWN TENNESSEE!',
+      celebrationTagline: 'ROCKY TOP YOU\'LL ALWAYS BE HOME SWEET HOME TO ME! 🍊🏈',
+      soundDescription: 'Synthesized Rocky Top brass march & Neyland Stadium touchdown cannon'
+    },
+    defaultMatch: {
+      opponent: 'Alabama Crimson Tide',
+      opponentShort: 'BAMA',
+      homeAway: 'home',
+      scoreTeam: 35,
+      scoreOpponent: 28,
+      period: '4th Quarter',
+      clock: '01:15',
+      lastEvent: 'TOUCHDOWN: Squirrel White 38 yd pass from Nico Iamaleava'
+    }
   }
 };
 

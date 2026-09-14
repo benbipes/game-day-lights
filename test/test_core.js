@@ -13,12 +13,15 @@ assert.ok(TEAMS.canes, 'Carolina Hurricanes team config exists');
 assert.ok(TEAMS.wolfpack, 'NC State Wolfpack team config exists');
 assert.ok(TEAMS.vikings, 'Minnesota Vikings team config exists');
 assert.ok(TEAMS.liverpool, 'Liverpool FC team config exists');
+assert.ok(TEAMS.vols, 'Tennessee Volunteers team config exists');
 
 // Verify RGB to XY conversion
 const canesXy = rgbToXy(200, 16, 46);
 assert.ok(canesXy[0] > 0.5 && canesXy[1] > 0.2, 'Canes Red converts to valid Hue XY');
 const vikingsXy = rgbToXy(79, 38, 131);
 assert.ok(vikingsXy[0] > 0.1 && vikingsXy[1] < 0.2, 'Vikings Purple converts to valid Hue XY');
+const volsXy = rgbToXy(255, 130, 0);
+assert.ok(volsXy[0] > 0.55 && volsXy[1] > 0.35, 'Tennessee Orange converts to valid Hue XY');
 console.log('  ✅ Teams and Hue XY color conversions validated');
 
 // Test 2: LightService Ambient & Celebration State Management
@@ -31,6 +34,11 @@ assert.strictEqual(lightService.currentTeamId, 'canes');
 assert.strictEqual(lightService.currentMode, 'ambient');
 assert.deepStrictEqual(lightService.currentLightColor, [200, 16, 46]);
 console.log('  ✅ Canes ambient lighting set to Red [200, 16, 46]');
+
+lightService.setAmbientLighting('vols');
+assert.strictEqual(lightService.currentTeamId, 'vols');
+assert.deepStrictEqual(lightService.currentLightColor, [255, 130, 0]);
+console.log('  ✅ Vols ambient lighting set to Tennessee Orange [255, 130, 0]');
 
 lightService.setAmbientLighting('vikings');
 assert.strictEqual(lightService.currentTeamId, 'vikings');
@@ -129,6 +137,23 @@ assert.strictEqual(wolfpackResult.scoreIncreased, true);
 assert.strictEqual(espnService.getMatch('wolfpack').scoreTeam, wolfpackInitial + 6);
 assert.strictEqual(lightService.currentMode, 'celebration');
 console.log('  ✅ Wolfpack Touchdown triggered Red & White celebration!');
+
+lightService.endCelebration();
+
+// 3f. Tennessee Volunteers Touchdown Webhook
+const volsInitial = espnService.getMatch('vols').scoreTeam;
+const volsResult = espnService.handleGenericScoreWebhook({
+  team: 'Tennessee Vols',
+  event: 'TOUCHDOWN',
+  player: 'Squirrel White',
+  points: 6
+});
+
+assert.strictEqual(volsResult.scoreIncreased, true);
+assert.strictEqual(espnService.getMatch('vols').scoreTeam, volsInitial + 6);
+assert.strictEqual(lightService.currentMode, 'celebration');
+assert.strictEqual(lightService.currentTeamId, 'vols');
+console.log('  ✅ Tennessee Touchdown triggered Rocky Top celebration!');
 
 lightService.endCelebration();
 

@@ -264,11 +264,102 @@ class SoundSynthesizer {
     });
   }
 
+  // 5. Tennessee Volunteers - Rocky Top Brass Fanfare & Neyland Cannon
+  playRockyTop() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    this.stopAll();
+
+    const now = this.ctx.currentTime;
+    const dur = 6.0;
+
+    // Neyland Stadium Celebration Cannon Blast
+    const cannonOsc = this.ctx.createOscillator();
+    const cannonGain = this.ctx.createGain();
+    cannonOsc.type = 'sine';
+    cannonOsc.frequency.setValueAtTime(100, now);
+    cannonOsc.frequency.exponentialRampToValueAtTime(25, now + 0.8);
+
+    cannonGain.gain.setValueAtTime(0.45, now);
+    cannonGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+    cannonOsc.connect(cannonGain);
+    cannonGain.connect(this.masterGain);
+    cannonOsc.start(now);
+    cannonOsc.stop(now + 0.95);
+    this.activeNodes.push(cannonOsc);
+
+    // Second Cannon blast
+    const cannon2 = this.ctx.createOscillator();
+    const cannon2Gain = this.ctx.createGain();
+    cannon2.type = 'triangle';
+    cannon2.frequency.setValueAtTime(80, now + 0.9);
+    cannon2.frequency.exponentialRampToValueAtTime(20, now + 1.6);
+    cannon2Gain.gain.setValueAtTime(0.35, now + 0.9);
+    cannon2Gain.gain.exponentialRampToValueAtTime(0.001, now + 1.7);
+    cannon2.connect(cannon2Gain);
+    cannon2Gain.connect(this.masterGain);
+    cannon2.start(now + 0.9);
+    cannon2.stop(now + 1.75);
+    this.activeNodes.push(cannon2);
+
+    // Up-tempo Rocky Top Brass Chorus
+    const melody = [
+      { f: 293.66, t: 0.15, d: 0.22 },
+      { f: 369.99, t: 0.40, d: 0.22 },
+      { f: 440.00, t: 0.65, d: 0.35 },
+      { f: 493.88, t: 1.05, d: 0.25 },
+      { f: 440.00, t: 1.35, d: 0.25 },
+      { f: 369.99, t: 1.65, d: 0.30 },
+      { f: 293.66, t: 2.00, d: 0.45 },
+      { f: 329.63, t: 2.50, d: 0.25 },
+      { f: 369.99, t: 2.80, d: 0.25 },
+      { f: 293.66, t: 3.10, d: 0.55 },
+      { f: 293.66, t: 3.70, d: 0.25 },
+      { f: 293.66, t: 4.00, d: 0.70 }
+    ];
+
+    melody.forEach((note) => {
+      const noteTime = now + note.t;
+      const osc = this.ctx.createOscillator();
+      const oscHarmonic = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(note.f, noteTime);
+
+      oscHarmonic.type = 'square';
+      oscHarmonic.frequency.setValueAtTime(note.f * 2, noteTime);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1400, noteTime);
+
+      gain.gain.setValueAtTime(0.001, noteTime);
+      gain.gain.linearRampToValueAtTime(0.18, noteTime + 0.04);
+      gain.gain.setValueAtTime(0.16, noteTime + note.d * 0.75);
+      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + note.d);
+
+      osc.connect(filter);
+      oscHarmonic.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(noteTime);
+      oscHarmonic.start(noteTime);
+      osc.stop(noteTime + note.d + 0.05);
+      oscHarmonic.stop(noteTime + note.d + 0.05);
+      this.activeNodes.push(osc, oscHarmonic);
+    });
+  }
+
   playByAudioKey(key) {
     if (key === 'nhl_goal_horn') this.playNhlGoalHorn();
     else if (key === 'gjallarhorn') this.playGjallarhorn();
     else if (key === 'liverpool_goal') this.playLiverpoolGoal();
     else if (key === 'wolfpack_touchdown') this.playWolfpackTouchdown();
+    else if (key === 'rocky_top') this.playRockyTop();
     else this.playNhlGoalHorn();
   }
 }
@@ -385,6 +476,34 @@ const FALLBACK_TEAMS = {
       period: '2nd Half',
       clock: '82:15',
       lastEvent: 'GOAL: Mohamed Salah (Right footed shot into bottom corner)'
+    }
+  },
+  vols: {
+    id: 'vols',
+    name: 'Tennessee Volunteers',
+    short: 'Vols',
+    league: 'NCAA',
+    sport: 'College Football',
+    primaryColor: '#FF8200',
+    secondaryColor: '#FFFFFF',
+    accentColor: '#58595B',
+    ambientRgb: [255, 130, 0],
+    celebration: {
+      colors: [[255, 130, 0], [255, 255, 255], [255, 100, 0], [88, 89, 91]],
+      durationMs: 14000,
+      flashIntervalMs: 250,
+      audioKey: 'rocky_top',
+      celebrationTitle: 'TOUCHDOWN TENNESSEE!',
+      celebrationTagline: 'ROCKY TOP YOU\'LL ALWAYS BE HOME SWEET HOME TO ME! 🍊🏈'
+    },
+    defaultMatch: {
+      opponent: 'Alabama Crimson Tide',
+      opponentShort: 'BAMA',
+      scoreTeam: 35,
+      scoreOpponent: 28,
+      period: '4th Quarter',
+      clock: '01:15',
+      lastEvent: 'TOUCHDOWN: Squirrel White 38 yd pass from Nico Iamaleava'
     }
   }
 };
@@ -800,8 +919,8 @@ function renderScoreboard() {
   const m = state.match;
   if (!team || !m) return;
 
-  const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', liverpool: '⚽' };
-  const oppIcons = { 'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏', 'Manchester City': '⛵' };
+  const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', liverpool: '⚽', vols: '🍊' };
+  const oppIcons = { 'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏', 'Manchester City': '⛵', 'Alabama Crimson Tide': '🐘' };
 
   if (elements.matchLeagueBadge) elements.matchLeagueBadge.textContent = `${team.league} • ${team.sport.toUpperCase()}`;
   if (elements.matchPeriodClock) elements.matchPeriodClock.textContent = `${m.period || ''} • ${m.clock || ''}`;
@@ -823,7 +942,7 @@ function renderScoreboard() {
   if (elements.screenClockText) elements.screenClockText.textContent = `${m.period || ''} ${m.clock || ''}`;
 
   if (elements.btnSimScoreText) {
-    const isFootball = team.id === 'vikings' || team.id === 'wolfpack';
+    const isFootball = team.id === 'vikings' || team.id === 'wolfpack' || team.id === 'vols';
     elements.btnSimScoreText.textContent = isFootball ? '+ Touchdown (+6)' : '+ Goal (+1)';
   }
 }
@@ -1162,7 +1281,7 @@ function setupEventListeners() {
   const btnSimScore = document.getElementById('btn-sim-score');
   if (btnSimScore) {
     btnSimScore.addEventListener('click', async () => {
-      const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack';
+      const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack' || state.activeTeam === 'vols';
       const pts = isFootball ? 6 : 1;
       const evtName = isFootball ? 'TOUCHDOWN' : 'GOAL';
 
@@ -1530,6 +1649,7 @@ function setupEventListeners() {
   const presets = {
     canes: { team: 'canes', event: 'GOAL', player: 'Sebastian Aho', scoreTeam: 4, scoreOpponent: 2 },
     wolfpack: { team: 'wolfpack', event: 'TOUCHDOWN', player: 'KC Concepcion', scoreTeam: 35, scoreOpponent: 20 },
+    vols: { team: 'vols', event: 'TOUCHDOWN', player: 'Squirrel White', scoreTeam: 35, scoreOpponent: 28 },
     vikings: { team: 'vikings', event: 'TOUCHDOWN', player: 'Justin Jefferson', scoreTeam: 31, scoreOpponent: 17 },
     liverpool: { team: 'liverpool', event: 'GOAL', player: 'Mohamed Salah', scoreTeam: 3, scoreOpponent: 1 }
   };
@@ -1545,6 +1665,13 @@ function setupEventListeners() {
   if (btnPresetWolf) {
     btnPresetWolf.addEventListener('click', () => {
       if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.wolfpack, null, 2);
+    });
+  }
+
+  const btnPresetVols = document.getElementById('btn-preset-vols');
+  if (btnPresetVols) {
+    btnPresetVols.addEventListener('click', () => {
+      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.vols, null, 2);
     });
   }
 
