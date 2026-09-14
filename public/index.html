@@ -156,32 +156,6 @@
             </div>
           </div>
 
-          <!-- Liverpool FC Card -->
-          <div class="team-card" data-team="liverpool" id="card-liverpool">
-            <div class="team-card-header">
-              <span class="league-pill">EPL • SOCCER</span>
-              <span class="active-badge">ACTIVE MATCH</span>
-            </div>
-            <div class="team-logo-area">
-              <div class="team-icon-circle liverpool-bg">
-                <span class="team-symbol">⚽</span>
-              </div>
-              <div class="team-meta">
-                <h3 class="team-name">Liverpool FC</h3>
-                <div class="match-opponent-text">vs Manchester City</div>
-              </div>
-            </div>
-            <div class="team-color-strip">
-              <span class="color-dot" style="background: #C8102E;" title="Anfield Red"></span>
-              <span class="color-dot" style="background: #00B2A9;" title="Teal Accent"></span>
-              <span class="color-dot" style="background: #F6EB61;" title="Yellow"></span>
-            </div>
-            <div class="team-celebration-preview">
-              <span class="preview-tag">CELEBRATION:</span>
-              <span class="preview-effect">⚽ Anfield Red Flare + Kop Roar</span>
-            </div>
-          </div>
-
           <!-- Tennessee Volunteers Card -->
           <div class="team-card" data-team="vols" id="card-vols">
             <div class="team-card-header">
@@ -411,7 +385,7 @@
     <!-- Footer -->
     <footer class="app-footer">
       <div class="footer-left">
-        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), Tennessee Volunteers (NCAA), and Liverpool FC (EPL).
+        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), and Tennessee Volunteers (NCAA).
       </div>
       <div class="footer-right" style="display: flex; align-items: center; gap: 0.8rem;">
         <span class="footer-dim">Philips Hue & Home Assistant Synced</span>
@@ -654,7 +628,7 @@
 
               <h4>Supported Webhook Payload Format</h4>
               <pre class="code-block"><code>{
-  "team": "canes", // canes | wolfpack | vikings | liverpool
+  "team": "canes", // canes | wolfpack | vikings | vols
   "event": "goal", // goal | touchdown | field_goal
   "player": "Sebastian Aho",
   "scoreTeam": 4,
@@ -687,7 +661,6 @@
                   <button id="btn-preset-wolfpack" class="btn btn-xs btn-ghost">Wolfpack TD</button>
                   <button id="btn-preset-vols" class="btn btn-xs btn-ghost">Vols TD</button>
                   <button id="btn-preset-vikings" class="btn btn-xs btn-ghost">Vikings TD</button>
-                  <button id="btn-preset-liverpool" class="btn btn-xs btn-ghost">Liverpool Goal</button>
                 </div>
               </div>
 

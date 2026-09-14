@@ -130,49 +130,6 @@ export const TEAMS = {
     }
   },
 
-  liverpool: {
-    id: 'liverpool',
-    name: 'Liverpool FC',
-    short: 'Liverpool',
-    league: 'Premier League',
-    sport: 'Soccer',
-    location: 'Liverpool, UK',
-    espnId: '364',
-    sportPath: 'soccer/eng.1',
-    yahooLeague: 'soc',
-    primaryColor: '#C8102E', // Anfield Red
-    secondaryColor: '#00B2A9', // Teal
-    accentColor: '#F6EB61', // Gold
-    ambientRgb: [200, 16, 46],
-    ambientXy: [0.671, 0.297],
-    brightness: 254,
-    celebration: {
-      style: 'anfield_roar',
-      colors: [
-        [200, 16, 46],
-        [255, 255, 255],
-        [255, 30, 45],
-        [0, 178, 169]
-      ],
-      durationMs: 12000,
-      flashIntervalMs: 250,
-      audioKey: 'liverpool_goal',
-      celebrationTitle: 'GOAL FOR LIVERPOOL!',
-      celebrationTagline: 'YOU\'LL NEVER WALK ALONE! ⚽',
-      soundDescription: 'The Kop roar, stadium goal pyro flash & celebration chimes'
-    },
-    defaultMatch: {
-      opponent: 'Manchester City',
-      opponentShort: 'MCI',
-      homeAway: 'home',
-      scoreTeam: 2,
-      scoreOpponent: 1,
-      period: '2nd Half',
-      clock: '82:15',
-      lastEvent: 'GOAL: Mohamed Salah (Right footed shot into bottom corner)'
-    }
-  },
-
   vols: {
     id: 'vols',
     name: 'Tennessee Volunteers',

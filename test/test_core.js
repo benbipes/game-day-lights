@@ -12,7 +12,6 @@ console.log('▶ Test 1: Verify Teams and Color Palettes');
 assert.ok(TEAMS.canes, 'Carolina Hurricanes team config exists');
 assert.ok(TEAMS.wolfpack, 'NC State Wolfpack team config exists');
 assert.ok(TEAMS.vikings, 'Minnesota Vikings team config exists');
-assert.ok(TEAMS.liverpool, 'Liverpool FC team config exists');
 assert.ok(TEAMS.vols, 'Tennessee Volunteers team config exists');
 
 // Verify RGB to XY conversion
@@ -163,23 +162,7 @@ console.log('  ✅ Vikings Touchdown triggered Purple & Gold celebration!');
 
 lightService.endCelebration();
 
-// 3d. Liverpool FC Goal Webhook
-const liverpoolInitialScore = espnService.getMatch('liverpool').scoreTeam;
-const liverpoolResult = espnService.handleGenericScoreWebhook({
-  team: 'Liverpool',
-  event: 'GOAL',
-  player: 'Mohamed Salah',
-  points: 1
-});
-
-assert.strictEqual(liverpoolResult.scoreIncreased, true);
-assert.strictEqual(espnService.getMatch('liverpool').scoreTeam, liverpoolInitialScore + 1);
-assert.strictEqual(lightService.currentMode, 'celebration');
-console.log('  ✅ Liverpool FC Goal triggered Anfield Red celebration!');
-
-lightService.endCelebration();
-
-// 3e. NC State Wolfpack Touchdown Webhook
+// 3d. NC State Wolfpack Touchdown Webhook
 const wolfpackInitial = espnService.getMatch('wolfpack').scoreTeam;
 const wolfpackResult = espnService.handleGenericScoreWebhook({
   team: 'NC State',
@@ -195,7 +178,7 @@ console.log('  ✅ Wolfpack Touchdown triggered Red & White celebration!');
 
 lightService.endCelebration();
 
-// 3f. Tennessee Volunteers Touchdown Webhook
+// 3e. Tennessee Volunteers Touchdown Webhook
 const volsInitial = espnService.getMatch('vols').scoreTeam;
 const volsResult = espnService.handleGenericScoreWebhook({
   team: 'Tennessee Vols',

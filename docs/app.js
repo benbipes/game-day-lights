@@ -290,72 +290,7 @@ class SoundSynthesizer {
     });
   }
 
-  // 3. Liverpool FC - "You'll Never Walk Alone" Anthem, Pipe Organ & Anfield Roar
-  playLiverpoolGoal() {
-    if (!this.enabled) return;
-    this.init();
-    if (!this.ctx) return;
-    this.stopAll();
-
-    const now = this.ctx.currentTime;
-    const dur = 6.5;
-
-    // Anfield Kop Crowd Roar (Resonant Filtered Bandpass Noise)
-    const bufferSize = this.ctx.sampleRate * 2;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-    noise.loop = true;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(450, now);
-    filter.Q.value = 1.6;
-
-    const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.01, now);
-    noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.8);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(this.masterGain);
-
-    noise.start(now);
-    noise.stop(now + dur);
-    this.activeNodes.push(noise);
-
-    // Cathedral Organ Chords (C Maj -> Em -> F Maj -> G Maj)
-    this.playOrganChord([130.81, 164.81, 196.00], now + 0.2, 1.8, 0.10); // C major
-    this.playOrganChord([164.81, 196.00, 246.94], now + 2.0, 1.8, 0.10); // E minor
-    this.playOrganChord([174.61, 220.00, 261.63], now + 3.8, 1.4, 0.10); // F major
-    this.playOrganChord([196.00, 246.94, 293.66], now + 5.2, 1.3, 0.11); // G major
-
-    // "You'll Never Walk Alone" Anthem Lead Brass ("Walk on, walk on, with hope in your heart...")
-    const ynwaMelody = [
-      { f: 261.63, t: 0.30, d: 0.40 }, // C4 ("When")
-      { f: 329.63, t: 0.75, d: 0.40 }, // E4 ("you")
-      { f: 392.00, t: 1.20, d: 0.65 }, // G4 ("walk")
-      { f: 440.00, t: 1.90, d: 0.35 }, // A4 ("through")
-      { f: 392.00, t: 2.30, d: 0.40 }, // G4 ("a")
-      { f: 329.63, t: 2.75, d: 0.65 }, // E4 ("storm...")
-      { f: 349.23, t: 3.50, d: 0.35 }, // F4
-      { f: 392.00, t: 3.90, d: 0.35 }, // G4
-      { f: 329.63, t: 4.30, d: 0.50 }, // E4
-      { f: 293.66, t: 4.85, d: 0.35 }, // D4
-      { f: 261.63, t: 5.25, d: 0.85 }  // C4 ("Walk on!")
-    ];
-
-    ynwaMelody.forEach(note => {
-      this.playBrassNote(note.f, now + note.t, note.d, 0.14);
-    });
-  }
-
-  // 4. NC State Wolfpack - "The Red and White Song" Collegiate March & Siren
+  // 3. NC State Wolfpack - "The Red and White Song" Collegiate March & Siren
   playWolfpackTouchdown() {
     if (!this.enabled) return;
     this.init();
@@ -475,7 +410,6 @@ class SoundSynthesizer {
   playByAudioKey(key) {
     if (key === 'nhl_goal_horn') this.playNhlGoalHorn();
     else if (key === 'gjallarhorn') this.playGjallarhorn();
-    else if (key === 'liverpool_goal') this.playLiverpoolGoal();
     else if (key === 'wolfpack_touchdown') this.playWolfpackTouchdown();
     else if (key === 'rocky_top') this.playRockyTop();
     else this.playNhlGoalHorn();
@@ -572,36 +506,6 @@ const FALLBACK_TEAMS = {
       period: '4th Quarter',
       clock: '03:18',
       lastEvent: 'TOUCHDOWN: Justin Jefferson 24 yd catch from Sam Darnold'
-    }
-  },
-  liverpool: {
-    id: 'liverpool',
-    name: 'Liverpool FC',
-    short: 'Liverpool',
-    league: 'Premier League',
-    sport: 'Soccer',
-    espnId: '364',
-    sportPath: 'soccer/eng.1',
-    primaryColor: '#C8102E',
-    secondaryColor: '#00B2A9',
-    accentColor: '#F6EB61',
-    ambientRgb: [200, 16, 46],
-    celebration: {
-      colors: [[200, 16, 46], [255, 255, 255], [255, 30, 45], [0, 178, 169]],
-      durationMs: 12000,
-      flashIntervalMs: 250,
-      audioKey: 'liverpool_goal',
-      celebrationTitle: 'GOAL FOR LIVERPOOL!',
-      celebrationTagline: 'YOU\'LL NEVER WALK ALONE! ⚽'
-    },
-    defaultMatch: {
-      opponent: 'Manchester City',
-      opponentShort: 'MCI',
-      scoreTeam: 2,
-      scoreOpponent: 1,
-      period: '2nd Half',
-      clock: '82:15',
-      lastEvent: 'GOAL: Mohamed Salah (Right footed shot into bottom corner)'
     }
   },
   vols: {
@@ -1126,7 +1030,7 @@ function renderScoreboard() {
   const m = state.match;
   if (!team || !m) return;
 
-  const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', liverpool: '⚽', vols: '🍊' };
+  const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', vols: '🍊' };
   const oppIcons = {
     'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏',
     'Manchester City': '⛵', 'Alabama Crimson Tide': '🐘', 'Kennesaw State Owls': '🦉',
@@ -2443,8 +2347,7 @@ function setupEventListeners() {
     canes: { team: 'canes', event: 'GOAL', player: 'Sebastian Aho', scoreTeam: 4, scoreOpponent: 2 },
     wolfpack: { team: 'wolfpack', event: 'TOUCHDOWN', player: 'KC Concepcion', scoreTeam: 35, scoreOpponent: 20 },
     vols: { team: 'vols', event: 'TOUCHDOWN', player: 'Squirrel White', scoreTeam: 35, scoreOpponent: 28 },
-    vikings: { team: 'vikings', event: 'TOUCHDOWN', player: 'Justin Jefferson', scoreTeam: 31, scoreOpponent: 17 },
-    liverpool: { team: 'liverpool', event: 'GOAL', player: 'Mohamed Salah', scoreTeam: 3, scoreOpponent: 1 }
+    vikings: { team: 'vikings', event: 'TOUCHDOWN', player: 'Justin Jefferson', scoreTeam: 31, scoreOpponent: 17 }
   };
 
   const btnPresetCanes = document.getElementById('btn-preset-canes');
@@ -2472,13 +2375,6 @@ function setupEventListeners() {
   if (btnPresetVik) {
     btnPresetVik.addEventListener('click', () => {
       if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.vikings, null, 2);
-    });
-  }
-
-  const btnPresetLiv = document.getElementById('btn-preset-liverpool');
-  if (btnPresetLiv) {
-    btnPresetLiv.addEventListener('click', () => {
-      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.liverpool, null, 2);
     });
   }
 

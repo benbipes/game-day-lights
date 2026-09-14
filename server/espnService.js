@@ -343,8 +343,6 @@ export class EspnService {
       matchedKey = 'wolfpack';
     } else if (rawTeam.includes('viking') || rawTeam.includes('minnesota') || rawTeam.includes('min')) {
       matchedKey = 'vikings';
-    } else if (rawTeam.includes('liverpool') || rawTeam.includes('lfc') || rawTeam.includes('reds')) {
-      matchedKey = 'liverpool';
     } else if (rawTeam.includes('vols') || rawTeam.includes('tennessee') || rawTeam.includes('volunteer') || rawTeam.includes('ut')) {
       matchedKey = 'vols';
     }
@@ -558,7 +556,6 @@ export class EspnService {
       canes: ['Sebastian Aho', 'Martin Necas', 'Seth Jarvis', 'Teuvo Teravainen', 'Brent Burns'],
       wolfpack: ['KC Concepcion', 'Grayson McCall', 'Jordan Waters', 'Dacari Collins'],
       vikings: ['Justin Jefferson', 'Jordan Addison', 'Aaron Jones', 'T.J. Hockenson'],
-      liverpool: ['Mohamed Salah', 'Luis Diaz', 'Dominik Szoboszlai', 'Darwin Nunez', 'Virgil van Dijk'],
       vols: ['Nico Iamaleava', 'Squirrel White', 'Dylan Sampson', 'Dont\'e Thornton Jr.', 'Bru McCoy']
     };
     const list = players[teamId] || ['Key Player'];

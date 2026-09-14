@@ -1,6 +1,6 @@
 # 🏒 Game Day Lights — Philips Hue & Home Assistant Smart Sync
 
-**Game Day Lights** synchronizes your smart home lighting (Philips Hue & Home Assistant) with live sports game days. Select today's match for the **Carolina Hurricanes**, **NC State Wolfpack**, **Minnesota Vikings**, or **Liverpool FC**, and the app sets your ambient lighting to the team's official colors. When a score occurs (via an ESPN webhook, soccer live API, or built-in game simulator), it triggers high-energy celebration sequences: flashing emergency red for Carolina and Liverpool, energetic red & white for Wolfpack, or majestic royal purple & gold for Minnesota.
+**Game Day Lights** synchronizes your smart home lighting (Philips Hue & Home Assistant) with live sports game days. Select today's match for the **Carolina Hurricanes**, **NC State Wolfpack**, **Minnesota Vikings**, or **Tennessee Volunteers**, and the app sets your ambient lighting to the team's official colors. When a score occurs (via an ESPN webhook or built-in game simulator), it triggers high-energy celebration sequences: flashing emergency red for Carolina, energetic red & white for Wolfpack, majestic royal purple & gold for Minnesota, or electric orange & white for Tennessee.
 
 ---
 
@@ -10,7 +10,7 @@
    - **Carolina Hurricanes (Canes - NHL)**: Storm Red (`#C8102E` / RGB `[200, 16, 46]`) & Onyx ambient glow. Celebration: Rapid emergency red siren flashing, warning beacon pulse, and NHL brass goal horn.
    - **NC State Wolfpack (NCAA)**: Wolfpack Red (`#CC0000` / RGB `[204, 0, 0]`) & Clean White. Celebration: Red & white high-tempo touchdown burst strobe, collegiate fight siren.
    - **Minnesota Vikings (NFL)**: Vikings Royal Purple (`#4F2683` / RGB `[79, 38, 131]`) & Vikings Gold (`#FFC62F`). Celebration: Alternating purple & gold strobe flash, acoustic Gjallarhorn drone blast, and Skol chant boom.
-   - **Liverpool FC (Premier League / UEFA)**: Anfield Crimson Red (`#C8102E`) & Teal accent. Celebration: Anfield flare strobe, Kop stadium cheer, and victory chimes.
+   - **Tennessee Volunteers (Vols - NCAA Football)**: Rocky Top Orange (`#FF8200` / RGB `[255, 130, 0]`) & Smokey White. Celebration: High-energy orange & white strobe, synthesized Rocky Top fight song brass fanfare.
 
 2. **Dual Smart Home Integration**:
    - **Home Assistant**: Direct webhook triggers (`POST /api/webhook/<webhook_id>`) or REST service calls (`POST /api/services/light/turn_on`), with pre-formatted, copy-paste ready `automations.yaml` snippets.
@@ -25,8 +25,8 @@
    - Zero-dependency, client-side synthesized sound effects:
      - Canes: Dual detuned brass air horn chords + emergency warning siren sweep.
      - Vikings: Ancient resonant Gjallarhorn drone with war drum beat.
-     - Liverpool: Stadium crowd roar + victory fanfare chords.
      - Wolfpack: Collegiate fight brass triad + howl siren.
+     - Vols: Authentic synthesized "Rocky Top" collegiate brass fanfare.
    - Master volume and mute toggle controls.
 
 5. **Live Scoreboard & Game Day Simulation Studio**:
@@ -55,7 +55,7 @@ The server will start at:
 
 ### 2. Open the Web App
 Open [http://localhost:3300](http://localhost:3300) in your browser:
-1. Click on **Carolina Hurricanes**, **NC State Wolfpack**, **Minnesota Vikings**, or **Liverpool FC** to sync your ambient lighting.
+1. Click on **Carolina Hurricanes**, **NC State Wolfpack**, **Minnesota Vikings**, or **Tennessee Volunteers** to sync your ambient lighting.
 2. Click **⚡ Test Goal Celebration** or use the simulator controls (`+ Goal`, `+ Touchdown`) to trigger the flashing lights and celebration audio.
 
 ---
@@ -97,15 +97,15 @@ curl -X POST http://localhost:3300/api/webhooks/score \
   }'
 ```
 
-#### Liverpool FC Goal:
+#### Tennessee Volunteers Touchdown:
 ```bash
 curl -X POST http://localhost:3300/api/webhooks/score \
   -H "Content-Type: application/json" \
   -d '{
-    "team": "liverpool",
-    "event": "GOAL",
-    "player": "Mohamed Salah",
-    "points": 1
+    "team": "vols",
+    "event": "TOUCHDOWN",
+    "player": "Squirrel White",
+    "points": 6
   }'
 ```
 
