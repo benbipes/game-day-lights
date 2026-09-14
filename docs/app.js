@@ -1361,9 +1361,12 @@ function highlightActiveTeamCard(teamId) {
 // Celebration Overlay Display
 let celebrationTimeout = null;
 
-function triggerCelebrationDisplay(data) {
+function triggerCelebrationDisplay(data = {}) {
   if (!elements.celebrationOverlay) return;
   elements.celebrationOverlay.classList.remove('hidden');
+
+  const durMs = data.durationMs || (state.config?.general?.celebrationDurationSeconds || 10) * 1000;
+  const durSec = durMs / 1000;
 
   if (elements.celebrationTitle) elements.celebrationTitle.textContent = data.celebrationTitle || 'GOAL!';
   if (elements.celebrationTagline) elements.celebrationTagline.textContent = data.celebrationTagline || 'CELEBRATION TRIGGERED!';
@@ -1376,7 +1379,7 @@ function triggerCelebrationDisplay(data) {
     elements.celebrationProgressBar.style.width = '100%';
     setTimeout(() => {
       if (elements.celebrationProgressBar) {
-        elements.celebrationProgressBar.style.transition = 'width 12s linear';
+        elements.celebrationProgressBar.style.transition = `width ${durSec}s linear`;
         elements.celebrationProgressBar.style.width = '0%';
       }
     }, 50);
@@ -1389,10 +1392,14 @@ function triggerCelebrationDisplay(data) {
   if (celebrationTimeout) clearTimeout(celebrationTimeout);
   celebrationTimeout = setTimeout(() => {
     hideCelebrationDisplay();
-  }, 12500);
+  }, durMs);
 }
 
 function hideCelebrationDisplay() {
+  if (celebrationTimeout) {
+    clearTimeout(celebrationTimeout);
+    celebrationTimeout = null;
+  }
   if (elements.celebrationOverlay) {
     elements.celebrationOverlay.classList.add('hidden');
   }
@@ -1411,10 +1418,13 @@ function runLocalCelebration(teamId, eventName = 'GOAL') {
   state.isCelebrating = true;
   updateThemeColors();
 
+  const durationMs = (state.config?.general?.celebrationDurationSeconds || 10) * 1000;
+
   triggerCelebrationDisplay({
     celebrationTitle: team.celebration?.celebrationTitle || 'GOAL!',
     celebrationTagline: team.celebration?.celebrationTagline || 'CELEBRATION!',
     audioKey: team.celebration?.audioKey,
+    durationMs,
     scoreEvent: { type: eventName }
   });
 
@@ -1446,7 +1456,6 @@ function runLocalCelebration(teamId, eventName = 'GOAL') {
     updateThemeColors();
   }, intervalMs);
 
-  const durationMs = team.celebration?.durationMs || 12000;
   setTimeout(() => {
     runLocalAmbient(teamId);
   }, durationMs);
@@ -1638,7 +1647,7 @@ function initSse() {
           triggerCelebrationDisplay(data);
         }
 
-        if (data.isCelebrating === false && elements.celebrationOverlay && !elements.celebrationOverlay.classList.contains('hidden')) {
+        if ((data.isCelebrating === false || data.celebrationEnded) && elements.celebrationOverlay && !elements.celebrationOverlay.classList.contains('hidden')) {
           hideCelebrationDisplay();
         }
 

@@ -62,11 +62,12 @@ lightService.dispatchSingleHueTarget = async (cleanIp, username, targetType, tar
   return { success: true, targetId };
 };
 
-// Target 3 was OFF before celebration; Target 1 was ON at warm white 180 bri
-lightService.updateConfig({ philipsHue: { targetIds: ['1', '3'], enabled: true, bridgeIp: '192.168.1.1', username: 'testuser' } });
+// Target 3 was OFF before celebration; Target 1 was ON at warm white 180 bri; Target 4 was ON with hs colormode
+lightService.updateConfig({ philipsHue: { targetIds: ['1', '3', '4'], enabled: true, bridgeIp: '192.168.1.1', username: 'testuser' } });
 lightService.previousStates = {
   '3': { targetId: '3', wasOn: false },
-  '1': { targetId: '1', wasOn: true, bri: 180, ct: 366, colormode: 'ct' }
+  '1': { targetId: '1', wasOn: true, bri: 180, ct: 366, colormode: 'ct' },
+  '4': { targetId: '4', wasOn: true, bri: 150, hue: 12000, sat: 200, colormode: 'hs' }
 };
 
 await lightService.endCelebration();
@@ -80,9 +81,16 @@ assert.ok(target1Dispatch, 'Target 1 received restore dispatch');
 assert.strictEqual(target1Dispatch.payload.on, true, 'Target 1 that was ON was restored to ON');
 assert.strictEqual(target1Dispatch.payload.bri, 180, 'Target 1 restored prior brightness');
 assert.strictEqual(target1Dispatch.payload.ct, 366, 'Target 1 restored prior color temperature');
-console.log('  ✅ Exact state restoration validated: OFF room restored to OFF, ON room restored to prior bri & ct');
 
-// Test Celebration Trigger
+const target4Dispatch = capturedDispatches.find(d => d.targetId === '4');
+assert.ok(target4Dispatch, 'Target 4 received restore dispatch');
+assert.strictEqual(target4Dispatch.payload.on, true, 'Target 4 that was ON was restored to ON');
+assert.strictEqual(target4Dispatch.payload.bri, 150, 'Target 4 restored prior brightness');
+assert.strictEqual(target4Dispatch.payload.hue, 12000, 'Target 4 restored prior hue');
+assert.strictEqual(target4Dispatch.payload.sat, 200, 'Target 4 restored prior sat');
+console.log('  ✅ Exact state restoration validated: OFF room restored to OFF, ON room restored to prior bri, ct, and hs color');
+
+// Test Celebration Trigger & Duration Sync
 let stateUpdates = [];
 lightService.onStateChange((state) => {
   stateUpdates.push(state);
@@ -93,12 +101,19 @@ assert.strictEqual(lightService.currentMode, 'celebration');
 assert.strictEqual(lightService.activeCelebrationTimer !== null, true);
 assert.strictEqual(lightService.activeHardwareStrobeInterval !== null, true);
 
+const startEvent = stateUpdates.find(s => s.celebrationStarted);
+assert.ok(startEvent, 'Celebration started event emitted');
+assert.strictEqual(typeof startEvent.durationMs, 'number', 'Emits durationMs in celebrationStarted');
+assert.strictEqual(typeof startEvent.durationSeconds, 'number', 'Emits durationSeconds in celebrationStarted');
+
 // End celebration
 await lightService.endCelebration();
 assert.strictEqual(lightService.currentMode, 'ambient');
 assert.strictEqual(lightService.activeHardwareStrobeInterval, null, 'Hardware strobe cleared on celebration end');
 assert.deepStrictEqual(lightService.currentLightColor, [79, 38, 131]);
-console.log('  ✅ Celebration triggered and smoothly restored to ambient');
+const endEvent = stateUpdates.find(s => s.celebrationEnded);
+assert.ok(endEvent, 'Celebration ended event emitted with celebrationEnded flag');
+console.log('  ✅ Celebration triggered, duration synchronized, and smoothly restored to prior state');
 
 
 // Test 3: EspnService Webhook Ingestion & Score Delta Detection

@@ -52,8 +52,8 @@ function saveConfigToFile(cfg) {
 const lightService = new LightService(userConfig);
 const espnService = new EspnService(lightService);
 
-// Initialize initial ambient light
-lightService.setAmbientLighting(userConfig.general.activeTeam || 'canes');
+// Initialize initial ambient light state without forcing hardware command on startup
+lightService.setAmbientLighting(userConfig.general.activeTeam || 'canes', false);
 
 // Connected SSE clients for real-time reactivity
 const sseClients = new Set();
