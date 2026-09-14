@@ -1,4 +1,4 @@
-// app.js - Game Day Lights Client Logic, Web Audio Synthesizer & Real-time Visualizer
+// app.js - Game Day Lights Client Engine, Web Audio Synthesizer & Interactive Controller
 
 class SoundSynthesizer {
   constructor() {
@@ -11,12 +11,14 @@ class SoundSynthesizer {
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AudioCtx();
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.value = 0.8;
-      this.masterGain.connect(this.ctx.destination);
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = 0.8;
+        this.masterGain.connect(this.ctx.destination);
+      }
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
   }
@@ -35,6 +37,7 @@ class SoundSynthesizer {
   playNhlGoalHorn() {
     if (!this.enabled) return;
     this.init();
+    if (!this.ctx) return;
     this.stopAll();
 
     const now = this.ctx.currentTime;
@@ -50,7 +53,6 @@ class SoundSynthesizer {
       osc.frequency.setValueAtTime(f, now);
       osc.frequency.exponentialRampToValueAtTime(f * 1.015, now + dur);
 
-      // Attack & decay
       gain.gain.setValueAtTime(0.001, now);
       gain.gain.linearRampToValueAtTime(0.2, now + 0.15);
       gain.gain.setValueAtTime(0.18, now + dur - 0.5);
@@ -72,9 +74,8 @@ class SoundSynthesizer {
     sirenOsc.type = 'sawtooth';
     sirenOsc.frequency.setValueAtTime(600, now);
 
-    lfo.frequency.setValueAtTime(1.8, now); // 1.8 Hz siren oscillation
+    lfo.frequency.setValueAtTime(1.8, now);
     lfoGain.gain.setValueAtTime(250, now);
-
     lfo.connect(sirenOsc.frequency);
 
     sirenGain.gain.setValueAtTime(0.001, now);
@@ -95,21 +96,20 @@ class SoundSynthesizer {
   playGjallarhorn() {
     if (!this.enabled) return;
     this.init();
+    if (!this.ctx) return;
     this.stopAll();
 
     const now = this.ctx.currentTime;
     const dur = 7.0;
 
-    // Deep ancient Scandinavian horn: 55Hz (A1), 110Hz (A2), 164.8Hz (E3)
     const pitches = [55, 110, 164.81];
-    pitches.forEach((freq, idx) => {
+    pitches.forEach((freq) => {
       const osc = this.ctx.createOscillator();
       const filter = this.ctx.createBiquadFilter();
       const gain = this.ctx.createGain();
 
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, now);
-      // Natural breath pitch-bend
       osc.frequency.linearRampToValueAtTime(freq * 1.03, now + 1.2);
       osc.frequency.exponentialRampToValueAtTime(freq * 0.98, now + dur);
 
@@ -133,7 +133,6 @@ class SoundSynthesizer {
       this.activeNodes.push(osc);
     });
 
-    // Sub-bass war drum boom (Skol clap rhythm)
     for (let i = 0; i < 4; i++) {
       const beatTime = now + (i * 1.4);
       const drumOsc = this.ctx.createOscillator();
@@ -159,12 +158,12 @@ class SoundSynthesizer {
   playLiverpoolGoal() {
     if (!this.enabled) return;
     this.init();
+    if (!this.ctx) return;
     this.stopAll();
 
     const now = this.ctx.currentTime;
     const dur = 6.0;
 
-    // Crowd noise buffer
     const bufferSize = this.ctx.sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -183,7 +182,7 @@ class SoundSynthesizer {
 
     const noiseGain = this.ctx.createGain();
     noiseGain.gain.setValueAtTime(0.01, now);
-    noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.8);
+    noiseGain.linearRampToValueAtTime ? noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.8) : (noiseGain.gain.value = 0.18);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
 
     noise.connect(filter);
@@ -194,8 +193,7 @@ class SoundSynthesizer {
     noise.stop(now + dur);
     this.activeNodes.push(noise);
 
-    // Fanfare chords
-    const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+    const notes = [523.25, 659.25, 783.99, 1046.50];
     notes.forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -220,12 +218,12 @@ class SoundSynthesizer {
   playWolfpackTouchdown() {
     if (!this.enabled) return;
     this.init();
+    if (!this.ctx) return;
     this.stopAll();
 
     const now = this.ctx.currentTime;
     const dur = 5.5;
 
-    // Upward pitch sweep siren (Wolfpack howl style)
     const siren = this.ctx.createOscillator();
     const sirenGain = this.ctx.createGain();
 
@@ -246,7 +244,6 @@ class SoundSynthesizer {
     siren.stop(now + dur);
     this.activeNodes.push(siren);
 
-    // Brass Fanfare Triad: D4 (293.66), F#4 (369.99), A4 (440)
     [293.66, 369.99, 440].forEach((f) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -276,7 +273,7 @@ class SoundSynthesizer {
   }
 }
 
-// Default fallback teams data for standalone static hosting (GitHub Pages)
+// Built-in Fallback Teams Data
 const FALLBACK_TEAMS = {
   canes: {
     id: 'canes',
@@ -404,7 +401,7 @@ const state = {
   match: JSON.parse(JSON.stringify(FALLBACK_TEAMS.canes.defaultMatch)),
   config: {
     homeAssistant: {
-      enabled: true,
+      enabled: false,
       mode: 'webhook',
       host: 'http://homeassistant.local:8123',
       webhookId: 'game_day_score_celebration',
@@ -427,8 +424,7 @@ const state = {
   logs: []
 };
 
-
-// DOM References
+// DOM References Container
 let elements = {};
 
 function initElements() {
@@ -498,62 +494,149 @@ function initElements() {
   };
 }
 
-// Connect SSE stream for real-time updates
-function initSse() {
-  const evtSource = new EventSource('/api/events/stream');
-
-  evtSource.addEventListener('initial_state', (e) => {
-    const data = JSON.parse(e.data);
-    state.activeTeam = data.activeTeam;
-    state.currentRgb = data.currentColor;
-    state.mode = data.mode;
-    state.isCelebrating = data.isCelebrating;
-    state.match = data.match;
-    state.config = data.config;
-    state.logs = data.logs || [];
-
-    updateThemeColors();
-    renderScoreboard();
-    renderLogs();
-    renderConfigForms();
-    fetchHaYaml();
-    highlightActiveTeamCard(state.activeTeam);
-  });
-
-  evtSource.addEventListener('state_update', (e) => {
-    const data = JSON.parse(e.data);
-    if (data.activeTeam) state.activeTeam = data.activeTeam;
-    if (data.currentColor) state.currentRgb = data.currentColor;
-    if (data.mode) state.mode = data.mode;
-    state.isCelebrating = !!data.isCelebrating;
-    if (data.match) state.match = data.match;
-
-    if (data.newLog) {
-      state.logs.unshift(data.newLog);
-      renderLogs();
-    }
-
-    if (data.celebrationStarted) {
-      triggerCelebrationDisplay(data);
-    }
-
-    if (data.isCelebrating === false && !elements.celebrationOverlay.classList.contains('hidden')) {
-      hideCelebrationDisplay();
-    }
-
-    updateThemeColors();
-    renderScoreboard();
-    highlightActiveTeamCard(state.activeTeam);
-  });
-
-  evtSource.onerror = () => {
-    state.isStandalone = true;
-    const team = state.teams[state.activeTeam];
-    elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'} (Standalone Mode)`;
-  };
+// Helper: escape HTML string
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
-// Update Dynamic CSS Variables
+// Generate client-side fallback YAML snippet
+function generateClientHaYaml() {
+  const webhookId = state.config?.homeAssistant?.webhookId || 'game_day_score_celebration';
+  const entityId = state.config?.homeAssistant?.entityId || 'light.living_room_lights';
+  return `- id: 'game_day_lights_webhook'
+  alias: 'Game Day Lights - Score Celebration & Ambient Sync'
+  trigger:
+    - platform: webhook
+      webhook_id: "${webhookId}"
+      allowed_methods:
+        - POST
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.json.event == 'score_celebration' }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: "${entityId}"
+              data:
+                rgb_color: "{{ trigger.json.rgb_color }}"
+                brightness: 255
+                flash: long
+            - delay:
+                seconds: 12
+            - service: light.turn_on
+              target:
+                entity_id: "${entityId}"
+              data:
+                rgb_color: "{{ trigger.json.rgb_color }}"
+                brightness: 220
+                transition: 2`;
+}
+
+// Fetch or generate Home Assistant YAML
+async function fetchHaYaml() {
+  if (!elements.haYamlBlock) return;
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  if (!isHttp || !isLocal) {
+    elements.haYamlBlock.innerHTML = `<code>${escapeHtml(generateClientHaYaml())}</code>`;
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/ha-yaml');
+    if (res.ok) {
+      const text = await res.text();
+      elements.haYamlBlock.innerHTML = `<code>${escapeHtml(text)}</code>`;
+    } else {
+      elements.haYamlBlock.innerHTML = `<code>${escapeHtml(generateClientHaYaml())}</code>`;
+    }
+  } catch (err) {
+    elements.haYamlBlock.innerHTML = `<code>${escapeHtml(generateClientHaYaml())}</code>`;
+  }
+}
+
+// Populate config forms
+function renderConfigForms() {
+  if (!state.config) return;
+
+  const ha = state.config.homeAssistant || {};
+  const haEnabledEl = document.getElementById('ha-enabled');
+  if (haEnabledEl) haEnabledEl.checked = !!ha.enabled;
+  const haModeEl = document.getElementById('ha-mode');
+  if (haModeEl) haModeEl.value = ha.mode || 'webhook';
+  const haHostEl = document.getElementById('ha-host');
+  if (haHostEl) haHostEl.value = ha.host || 'http://homeassistant.local:8123';
+  const haWebhookEl = document.getElementById('ha-webhook-id');
+  if (haWebhookEl) haWebhookEl.value = ha.webhookId || 'game_day_score_celebration';
+  const haEntityEl = document.getElementById('ha-entity-id');
+  if (haEntityEl) haEntityEl.value = ha.entityId || 'light.living_room_lights';
+  toggleHaModeFields(ha.mode || 'webhook');
+
+  const hue = state.config.philipsHue || {};
+  const hueEnabledEl = document.getElementById('hue-enabled');
+  if (hueEnabledEl) hueEnabledEl.checked = !!hue.enabled;
+  const hueIpEl = document.getElementById('hue-ip');
+  if (hueIpEl) hueIpEl.value = hue.bridgeIp || '192.168.1.50';
+  const hueUserEl = document.getElementById('hue-user');
+  if (hueUserEl) hueUserEl.value = hue.username || '';
+  const hueTypeEl = document.getElementById('hue-target-type');
+  if (hueTypeEl) hueTypeEl.value = hue.targetType || 'group';
+  const hueTargetIdEl = document.getElementById('hue-target-id');
+  if (hueTargetIdEl) hueTargetIdEl.value = hue.targetId || '1';
+  const hueAlertEl = document.getElementById('hue-alert-strobe');
+  if (hueAlertEl) hueAlertEl.checked = !!hue.useAlertStrobe;
+
+  const origin = window.location.origin || 'http://localhost:3300';
+  if (elements.webhookUrlDisplay) {
+    elements.webhookUrlDisplay.textContent = `${origin}/api/webhooks/score`;
+  }
+  if (elements.webhookEspnUrlDisplay) {
+    elements.webhookEspnUrlDisplay.textContent = `${origin}/api/webhooks/espn`;
+  }
+}
+
+function toggleHaModeFields(mode) {
+  if (elements.groupHaToken) {
+    elements.groupHaToken.style.display = mode === 'service' ? 'block' : 'none';
+  }
+}
+
+// Render activity logs
+function renderLogs() {
+  if (!elements.logsContainer) return;
+  if (elements.logCount) elements.logCount.textContent = state.logs.length;
+  elements.logsContainer.innerHTML = '';
+
+  if (state.logs.length === 0) {
+    elements.logsContainer.innerHTML = '<div style="color: #64748b; padding: 1rem; text-align: center;">No activity recorded yet. Trigger a celebration or webhook to see live telemetry.</div>';
+    return;
+  }
+
+  for (const log of state.logs.slice(0, 30)) {
+    const el = document.createElement('div');
+    el.className = log.success === false ? 'log-entry error' : 'log-entry';
+
+    const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '';
+    const detailsStr = typeof log.details === 'object' ? JSON.stringify(log.details) : String(log.details || '');
+
+    el.innerHTML = `
+      <span class="log-time">${escapeHtml(time)}</span>
+      <span class="log-badge">${escapeHtml(log.source || 'App')}</span>
+      <span class="log-badge">${escapeHtml(log.type || 'EVENT')}</span>
+      <span class="log-details">${escapeHtml(detailsStr)}</span>
+    `;
+    elements.logsContainer.appendChild(el);
+  }
+}
+
+// Update Dynamic CSS Variables and theme
 function updateThemeColors() {
   const root = document.documentElement;
   const rgbStr = state.currentRgb.join(', ');
@@ -566,20 +649,25 @@ function updateThemeColors() {
     root.style.setProperty('--team-secondary', team.secondaryColor);
   }
 
-  elements.colorRgbDisplay.textContent = `RGB(${rgbStr})`;
+  if (elements.colorRgbDisplay) {
+    elements.colorRgbDisplay.textContent = `RGB(${rgbStr})`;
+  }
 
-  if (state.isCelebrating) {
-    elements.statusLabel.textContent = '🚨 CELEBRATION STROBE ACTIVE';
-    elements.strobeModeText.textContent = 'GOAL STROBE FLASHING';
-    elements.strobeModeText.style.color = '#ffc62f';
-  } else {
-    elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'}`;
-    elements.strobeModeText.textContent = 'AMBIENT SYNCED';
-    elements.strobeModeText.style.color = 'var(--team-primary)';
+  if (elements.statusLabel && elements.strobeModeText) {
+    if (state.isCelebrating) {
+      elements.statusLabel.textContent = '🚨 CELEBRATION STROBE ACTIVE';
+      elements.strobeModeText.textContent = 'GOAL STROBE FLASHING';
+      elements.strobeModeText.style.color = '#ffc62f';
+    } else {
+      const modeSuffix = state.isStandalone ? ' (Standalone)' : '';
+      elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'}${modeSuffix}`;
+      elements.strobeModeText.textContent = 'AMBIENT SYNCED';
+      elements.strobeModeText.style.color = 'var(--team-primary)';
+    }
   }
 }
 
-// Render Scoreboard
+// Render scoreboard
 function renderScoreboard() {
   const team = state.teams[state.activeTeam];
   const m = state.match;
@@ -588,46 +676,70 @@ function renderScoreboard() {
   const teamIcons = { canes: '🌀', wolfpack: '🐺', vikings: '⚔️', liverpool: '⚽' };
   const oppIcons = { 'New York Rangers': '🗽', 'Green Bay Packers': '🧀', 'North Carolina Tar Heels': '🐏', 'Manchester City': '⛵' };
 
-  elements.matchLeagueBadge.textContent = `${team.league} • ${team.sport.toUpperCase()}`;
-  elements.matchPeriodClock.textContent = `${m.period} • ${m.clock}`;
+  if (elements.matchLeagueBadge) elements.matchLeagueBadge.textContent = `${team.league} • ${team.sport.toUpperCase()}`;
+  if (elements.matchPeriodClock) elements.matchPeriodClock.textContent = `${m.period || ''} • ${m.clock || ''}`;
 
-  elements.scoreTeamLogoWrap.textContent = teamIcons[team.id] || '🏆';
-  elements.scoreTeamName.textContent = team.name;
-  elements.scoreTeamPts.textContent = m.scoreTeam;
+  if (elements.scoreTeamLogoWrap) elements.scoreTeamLogoWrap.textContent = teamIcons[team.id] || '🏆';
+  if (elements.scoreTeamName) elements.scoreTeamName.textContent = team.name;
+  if (elements.scoreTeamPts) elements.scoreTeamPts.textContent = m.scoreTeam ?? 0;
 
-  elements.scoreOpponentName.textContent = m.opponent;
-  elements.scoreOpponentPts.textContent = m.scoreOpponent;
-  document.getElementById('score-opponent-badge').textContent = oppIcons[m.opponent] || '🛡️';
+  if (elements.scoreOpponentName) elements.scoreOpponentName.textContent = m.opponent || 'Opponent';
+  if (elements.scoreOpponentPts) elements.scoreOpponentPts.textContent = m.scoreOpponent ?? 0;
 
-  elements.matchLastEvent.textContent = m.lastEvent;
+  const oppBadge = document.getElementById('score-opponent-badge');
+  if (oppBadge) oppBadge.textContent = oppIcons[m.opponent] || '🛡️';
 
-  // TV Screen Display
-  elements.screenTeamIcon.textContent = teamIcons[team.id] || '🏆';
-  elements.screenMatchupText.textContent = `${team.short.toUpperCase()} VS ${m.opponentShort || 'OPP'}`;
-  elements.screenClockText.textContent = `${m.period} ${m.clock}`;
+  if (elements.matchLastEvent) elements.matchLastEvent.textContent = m.lastEvent || 'Game in progress';
 
-  // Update simulator button label based on sport
-  const isFootball = team.id === 'vikings' || team.id === 'wolfpack';
-  elements.btnSimScoreText.textContent = isFootball ? '+ Touchdown (+6)' : '+ Goal (+1)';
+  if (elements.screenTeamIcon) elements.screenTeamIcon.textContent = teamIcons[team.id] || '🏆';
+  if (elements.screenMatchupText) elements.screenMatchupText.textContent = `${team.short.toUpperCase()} VS ${m.opponentShort || 'OPP'}`;
+  if (elements.screenClockText) elements.screenClockText.textContent = `${m.period || ''} ${m.clock || ''}`;
+
+  if (elements.btnSimScoreText) {
+    const isFootball = team.id === 'vikings' || team.id === 'wolfpack';
+    elements.btnSimScoreText.textContent = isFootball ? '+ Touchdown (+6)' : '+ Goal (+1)';
+  }
 }
 
-// Celebration Display & Sound
+// Highlight Active Team Card
+function highlightActiveTeamCard(teamId) {
+  const cards = document.querySelectorAll('.team-card');
+  if (cards) {
+    cards.forEach(card => {
+      const cardTeam = card.getAttribute('data-team');
+      if (cardTeam === teamId) {
+        card.classList.add('active');
+      } else {
+        card.classList.remove('active');
+      }
+    });
+  }
+}
+
+// Celebration Overlay Display
 let celebrationTimeout = null;
 
 function triggerCelebrationDisplay(data) {
+  if (!elements.celebrationOverlay) return;
   elements.celebrationOverlay.classList.remove('hidden');
-  elements.celebrationTitle.textContent = data.celebrationTitle || 'GOAL!';
-  elements.celebrationTagline.textContent = data.celebrationTagline || 'CELEBRATION TRIGGERED!';
-  elements.celebrationBadge.textContent = data.scoreEvent?.type ? `🚨 ${data.scoreEvent.type}!` : '🚨 SCORE!';
 
-  // Reset & animate progress bar
-  elements.celebrationProgressBar.style.width = '100%';
-  setTimeout(() => {
-    elements.celebrationProgressBar.style.transition = 'width 12s linear';
-    elements.celebrationProgressBar.style.width = '0%';
-  }, 50);
+  if (elements.celebrationTitle) elements.celebrationTitle.textContent = data.celebrationTitle || 'GOAL!';
+  if (elements.celebrationTagline) elements.celebrationTagline.textContent = data.celebrationTagline || 'CELEBRATION TRIGGERED!';
+  if (elements.celebrationBadge) {
+    elements.celebrationBadge.textContent = data.scoreEvent?.type ? `🚨 ${data.scoreEvent.type}!` : '🚨 SCORE!';
+  }
 
-  // Play synthesized audio
+  if (elements.celebrationProgressBar) {
+    elements.celebrationProgressBar.style.transition = 'none';
+    elements.celebrationProgressBar.style.width = '100%';
+    setTimeout(() => {
+      if (elements.celebrationProgressBar) {
+        elements.celebrationProgressBar.style.transition = 'width 12s linear';
+        elements.celebrationProgressBar.style.width = '0%';
+      }
+    }, 50);
+  }
+
   if (data.audioKey) {
     state.sound.playByAudioKey(data.audioKey);
   }
@@ -639,19 +751,16 @@ function triggerCelebrationDisplay(data) {
 }
 
 function hideCelebrationDisplay() {
-  elements.celebrationOverlay.classList.add('hidden');
-  elements.celebrationProgressBar.style.transition = 'none';
-  elements.celebrationProgressBar.style.width = '100%';
+  if (elements.celebrationOverlay) {
+    elements.celebrationOverlay.classList.add('hidden');
+  }
+  if (elements.celebrationProgressBar) {
+    elements.celebrationProgressBar.style.transition = 'none';
+    elements.celebrationProgressBar.style.width = '100%';
+  }
 }
 
-// Highlight Team Card
-function highlightActiveTeamCard(teamId) {
-  document.querySelectorAll('.team-card').forEach(card => {
-    card.classList.toggle('active', card.dataset.team === teamId);
-  });
-}
-
-// Local celebration runner for standalone / GitHub Pages hosting
+// Local Client-Side Celebration Runner
 let localFlashInterval = null;
 
 function runLocalCelebration(teamId, eventName = 'GOAL') {
@@ -661,24 +770,27 @@ function runLocalCelebration(teamId, eventName = 'GOAL') {
   updateThemeColors();
 
   triggerCelebrationDisplay({
-    celebrationTitle: team.celebration.celebrationTitle,
-    celebrationTagline: team.celebration.celebrationTagline,
-    audioKey: team.celebration.audioKey,
+    celebrationTitle: team.celebration?.celebrationTitle || 'GOAL!',
+    celebrationTagline: team.celebration?.celebrationTagline || 'CELEBRATION!',
+    audioKey: team.celebration?.audioKey,
     scoreEvent: { type: eventName }
   });
 
   if (localFlashInterval) clearInterval(localFlashInterval);
   let step = 0;
+  const colors = team.celebration?.colors || [[255, 0, 0], [255, 255, 255]];
+  const intervalMs = team.celebration?.flashIntervalMs || 250;
+
   localFlashInterval = setInterval(() => {
     step++;
-    const colors = team.celebration.colors;
     state.currentRgb = colors[step % colors.length];
     updateThemeColors();
-  }, team.celebration.flashIntervalMs || 250);
+  }, intervalMs);
 
+  const durationMs = team.celebration?.durationMs || 12000;
   setTimeout(() => {
     runLocalAmbient(teamId);
-  }, team.celebration.durationMs || 12000);
+  }, durationMs);
 }
 
 function runLocalAmbient(teamId) {
@@ -709,31 +821,117 @@ async function selectTeam(teamId) {
   renderScoreboard();
   highlightActiveTeamCard(teamId);
 
-  try {
-    const res = await fetch('/api/select-team', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId })
-    });
-    const data = await res.json();
-    if (data.success && data.match) {
-      state.match = data.match;
-      renderScoreboard();
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  if (isHttp && isLocal) {
+    try {
+      const res = await fetch('/api/select-team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId })
+      });
+      const data = await res.json();
+      if (data.success && data.match) {
+        state.match = data.match;
+        renderScoreboard();
+      }
+    } catch (err) {
+      state.isStandalone = true;
     }
-  } catch (err) {
+  } else {
     state.isStandalone = true;
   }
 }
 
-// Event Listeners Initialization
+// Safe SSE Connection
+function initSse() {
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' ||
+                  window.location.hostname.startsWith('192.168.') ||
+                  window.location.hostname.startsWith('10.');
+
+  if (!isHttp || !isLocal) {
+    state.isStandalone = true;
+    updateThemeColors();
+    return;
+  }
+
+  try {
+    const evtSource = new EventSource('/api/events/stream');
+
+    evtSource.addEventListener('initial_state', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        state.activeTeam = data.activeTeam;
+        state.currentRgb = data.currentColor;
+        state.mode = data.mode;
+        state.isCelebrating = data.isCelebrating;
+        state.match = data.match;
+        state.config = data.config;
+        state.logs = data.logs || [];
+
+        updateThemeColors();
+        renderScoreboard();
+        renderLogs();
+        renderConfigForms();
+        fetchHaYaml();
+        highlightActiveTeamCard(state.activeTeam);
+      } catch (err) {}
+    });
+
+    evtSource.addEventListener('state_update', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.activeTeam) state.activeTeam = data.activeTeam;
+        if (data.currentColor) state.currentRgb = data.currentColor;
+        if (data.mode) state.mode = data.mode;
+        state.isCelebrating = !!data.isCelebrating;
+        if (data.match) state.match = data.match;
+
+        if (data.newLog) {
+          state.logs.unshift(data.newLog);
+          renderLogs();
+        }
+
+        if (data.celebrationStarted) {
+          triggerCelebrationDisplay(data);
+        }
+
+        if (data.isCelebrating === false && elements.celebrationOverlay && !elements.celebrationOverlay.classList.contains('hidden')) {
+          hideCelebrationDisplay();
+        }
+
+        updateThemeColors();
+        renderScoreboard();
+        highlightActiveTeamCard(state.activeTeam);
+      } catch (err) {}
+    });
+
+    evtSource.onerror = () => {
+      state.isStandalone = true;
+      updateThemeColors();
+    };
+  } catch (err) {
+    state.isStandalone = true;
+    updateThemeColors();
+  }
+}
+
+// Event Listeners Setup
 function setupEventListeners() {
   // Team cards click
-  document.querySelectorAll('.team-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const teamId = card.dataset.team;
-      selectTeam(teamId);
+  const teamCards = document.querySelectorAll('.team-card');
+  if (teamCards) {
+    teamCards.forEach(card => {
+      card.addEventListener('click', (e) => {
+        e.preventDefault();
+        const teamId = card.getAttribute('data-team');
+        if (teamId) selectTeam(teamId);
+      });
     });
-  });
+  }
 
   // Sound Toggle
   if (elements.btnSoundToggle) {
@@ -741,184 +939,222 @@ function setupEventListeners() {
       state.sound.enabled = !state.sound.enabled;
       if (state.sound.enabled) {
         state.sound.init();
-        elements.soundIcon.textContent = '🔊';
-        elements.soundLabel.textContent = 'Sound ON';
+        if (elements.soundIcon) elements.soundIcon.textContent = '🔊';
+        if (elements.soundLabel) elements.soundLabel.textContent = 'Sound ON';
       } else {
         state.sound.stopAll();
-        elements.soundIcon.textContent = '🔇';
-        elements.soundLabel.textContent = 'Sound MUTED';
+        if (elements.soundIcon) elements.soundIcon.textContent = '🔇';
+        if (elements.soundLabel) elements.soundLabel.textContent = 'Sound MUTED';
       }
     });
   }
 
-  // Quick Celebration & Ambient Buttons
-  elements.btnQuickCelebrate.addEventListener('click', async () => {
-
-  try {
-    const res = await fetch('/api/test-celebration', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId: state.activeTeam })
-    });
-    if (!res.ok) throw new Error('API unavailable');
-  } catch (err) {
-    runLocalCelebration(state.activeTeam, 'TEST CELEBRATION');
-  }
-});
-
-elements.btnQuickAmbient.addEventListener('click', async () => {
-  hideCelebrationDisplay();
-  state.sound.stopAll();
-  try {
-    await fetch('/api/test-ambient', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId: state.activeTeam })
-    });
-  } catch (err) {
-    runLocalAmbient(state.activeTeam);
-  }
-});
-
-// Simulator Controls
-document.getElementById('btn-sim-score').addEventListener('click', async () => {
-  const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack';
-  const pts = isFootball ? 6 : 1;
-  const evtName = isFootball ? 'TOUCHDOWN' : 'GOAL';
-
-  try {
-    const res = await fetch('/api/simulate-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        teamId: state.activeTeam,
-        event: evtName,
-        points: pts
-      })
-    });
-    if (!res.ok) throw new Error('API unavailable');
-  } catch (err) {
-    if (state.match) {
-      state.match.scoreTeam += pts;
-      state.match.lastEvent = `${evtName} scored (+${pts} pts)`;
-      renderScoreboard();
-    }
-    runLocalCelebration(state.activeTeam, evtName);
-  }
-});
-
-document.getElementById('btn-sim-touchdown').addEventListener('click', async () => {
-  try {
-    const res = await fetch('/api/simulate-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        teamId: state.activeTeam,
-        event: 'TOUCHDOWN',
-        points: 6
-      })
-    });
-    if (!res.ok) throw new Error('API unavailable');
-  } catch (err) {
-    if (state.match) {
-      state.match.scoreTeam += 6;
-      state.match.lastEvent = `TOUCHDOWN scored (+6 pts)`;
-      renderScoreboard();
-    }
-    runLocalCelebration(state.activeTeam, 'TOUCHDOWN');
-  }
-});
-
-document.getElementById('btn-sim-opp').addEventListener('click', async () => {
-  try {
-    const res = await fetch('/api/simulate-opponent-score', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId: state.activeTeam })
-    });
-    if (!res.ok) throw new Error('API unavailable');
-  } catch (err) {
-    if (state.match) {
-      state.match.scoreOpponent += 1;
-      state.match.lastEvent = `OPPONENT SCORE (+1 pt)`;
-      renderScoreboard();
-    }
-  }
-});
-
-document.getElementById('btn-sim-reset').addEventListener('click', async () => {
-  try {
-    const res = await fetch('/api/reset-match', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId: state.activeTeam })
-    });
-    if (!res.ok) throw new Error('API unavailable');
-  } catch (err) {
-    const team = state.teams[state.activeTeam];
-    if (team) {
-      state.match = JSON.parse(JSON.stringify(team.defaultMatch));
-      renderScoreboard();
-      runLocalAmbient(state.activeTeam);
-    }
-  }
-});
-
-
-  // Tabs
-  elements.tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      elements.tabButtons.forEach(b => b.classList.remove('active'));
-      elements.tabPanels.forEach(p => p.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById(btn.dataset.tab).classList.add('active');
-    });
-  });
-
-  elements.haModeSelect.addEventListener('change', (e) => {
-    toggleHaModeFields(e.target.value);
-  });
-
-  // Save Home Assistant Config
-  elements.btnSaveHa.addEventListener('click', async () => {
-    const updated = {
-      homeAssistant: {
-        enabled: document.getElementById('ha-enabled').checked,
-        mode: document.getElementById('ha-mode').value,
-        host: document.getElementById('ha-host').value,
-        webhookId: document.getElementById('ha-webhook-id').value,
-        entityId: document.getElementById('ha-entity-id').value,
-        accessToken: document.getElementById('ha-token').value
+  // Quick Celebration Button
+  if (elements.btnQuickCelebrate) {
+    elements.btnQuickCelebrate.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/test-celebration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: state.activeTeam })
+        });
+        if (!res.ok) throw new Error('API unavailable');
+      } catch (err) {
+        runLocalCelebration(state.activeTeam, 'TEST CELEBRATION');
       }
-    };
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated)
     });
-    fetchHaYaml();
-    alert('Home Assistant settings saved successfully!');
-  });
+  }
+
+  // Quick Ambient Reset Button
+  if (elements.btnQuickAmbient) {
+    elements.btnQuickAmbient.addEventListener('click', async () => {
+      hideCelebrationDisplay();
+      state.sound.stopAll();
+      try {
+        await fetch('/api/test-ambient', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: state.activeTeam })
+        });
+      } catch (err) {
+        runLocalAmbient(state.activeTeam);
+      }
+    });
+  }
+
+  // Simulator Controls
+  const btnSimScore = document.getElementById('btn-sim-score');
+  if (btnSimScore) {
+    btnSimScore.addEventListener('click', async () => {
+      const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack';
+      const pts = isFootball ? 6 : 1;
+      const evtName = isFootball ? 'TOUCHDOWN' : 'GOAL';
+
+      try {
+        const res = await fetch('/api/simulate-score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teamId: state.activeTeam,
+            event: evtName,
+            points: pts
+          })
+        });
+        if (!res.ok) throw new Error('API unavailable');
+      } catch (err) {
+        if (state.match) {
+          state.match.scoreTeam = (state.match.scoreTeam || 0) + pts;
+          state.match.lastEvent = `${evtName} scored (+${pts} pts)`;
+          renderScoreboard();
+        }
+        runLocalCelebration(state.activeTeam, evtName);
+      }
+    });
+  }
+
+  const btnSimTd = document.getElementById('btn-sim-touchdown');
+  if (btnSimTd) {
+    btnSimTd.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/simulate-score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            teamId: state.activeTeam,
+            event: 'TOUCHDOWN',
+            points: 6
+          })
+        });
+        if (!res.ok) throw new Error('API unavailable');
+      } catch (err) {
+        if (state.match) {
+          state.match.scoreTeam = (state.match.scoreTeam || 0) + 6;
+          state.match.lastEvent = `TOUCHDOWN scored (+6 pts)`;
+          renderScoreboard();
+        }
+        runLocalCelebration(state.activeTeam, 'TOUCHDOWN');
+      }
+    });
+  }
+
+  const btnSimOpp = document.getElementById('btn-sim-opp');
+  if (btnSimOpp) {
+    btnSimOpp.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/simulate-opponent-score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: state.activeTeam })
+        });
+        if (!res.ok) throw new Error('API unavailable');
+      } catch (err) {
+        if (state.match) {
+          state.match.scoreOpponent = (state.match.scoreOpponent || 0) + 1;
+          state.match.lastEvent = `OPPONENT SCORE (+1 pt)`;
+          renderScoreboard();
+        }
+      }
+    });
+  }
+
+  const btnSimReset = document.getElementById('btn-sim-reset');
+  if (btnSimReset) {
+    btnSimReset.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/reset-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ teamId: state.activeTeam })
+        });
+        if (!res.ok) throw new Error('API unavailable');
+      } catch (err) {
+        const team = state.teams[state.activeTeam];
+        if (team) {
+          state.match = JSON.parse(JSON.stringify(team.defaultMatch));
+          renderScoreboard();
+          runLocalAmbient(state.activeTeam);
+        }
+      }
+    });
+  }
+
+  // Tabs Switching
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+  if (tabButtons && tabButtons.length > 0) {
+    tabButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const tabId = btn.getAttribute('data-tab');
+        if (!tabId) return;
+
+        const targetPanel = document.getElementById(tabId);
+        if (!targetPanel) return;
+
+        tabButtons.forEach(b => b.classList.remove('active'));
+        if (tabPanels) tabPanels.forEach(p => p.classList.remove('active'));
+
+        btn.classList.add('active');
+        targetPanel.classList.add('active');
+      });
+    });
+  }
+
+  // HA Mode toggle
+  if (elements.haModeSelect) {
+    elements.haModeSelect.addEventListener('change', (e) => {
+      toggleHaModeFields(e.target.value);
+    });
+  }
+
+  // Save HA Config
+  if (elements.btnSaveHa) {
+    elements.btnSaveHa.addEventListener('click', async () => {
+      const updated = {
+        homeAssistant: {
+          enabled: document.getElementById('ha-enabled')?.checked || false,
+          mode: document.getElementById('ha-mode')?.value || 'webhook',
+          host: document.getElementById('ha-host')?.value || 'http://homeassistant.local:8123',
+          webhookId: document.getElementById('ha-webhook-id')?.value || 'game_day_score_celebration',
+          entityId: document.getElementById('ha-entity-id')?.value || 'light.living_room_lights',
+          accessToken: document.getElementById('ha-token')?.value || ''
+        }
+      };
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (e) {}
+      fetchHaYaml();
+      alert('Home Assistant settings saved successfully!');
+    });
+  }
 
   // Save Philips Hue Config
-  elements.btnSaveHue.addEventListener('click', async () => {
-    const updated = {
-      philipsHue: {
-        enabled: document.getElementById('hue-enabled').checked,
-        bridgeIp: document.getElementById('hue-ip').value,
-        username: document.getElementById('hue-user').value,
-        targetType: document.getElementById('hue-target-type').value,
-        targetId: document.getElementById('hue-target-id').value,
-        useAlertStrobe: document.getElementById('hue-alert-strobe').checked
-      }
-    };
-    await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated)
+  if (elements.btnSaveHue) {
+    elements.btnSaveHue.addEventListener('click', async () => {
+      const updated = {
+        philipsHue: {
+          enabled: document.getElementById('hue-enabled')?.checked ?? true,
+          bridgeIp: document.getElementById('hue-ip')?.value || '',
+          username: document.getElementById('hue-user')?.value || '',
+          targetType: document.getElementById('hue-target-type')?.value || 'group',
+          targetId: document.getElementById('hue-target-id')?.value || '1',
+          useAlertStrobe: document.getElementById('hue-alert-strobe')?.checked ?? true
+        }
+      };
+      try {
+        await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (e) {}
+      alert('Philips Hue settings saved successfully!');
     });
-    alert('Philips Hue settings saved successfully!');
-  });
+  }
 
   // Auto-Detect Hue Bridge
   const btnDiscoverHue = document.getElementById('btn-discover-hue');
@@ -929,7 +1165,8 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
         const res = await fetch('/api/hue/discover', { method: 'POST' });
         const data = await res.json();
         if (data.success && data.bridges && data.bridges.length > 0) {
-          document.getElementById('hue-ip').value = data.bridges[0].ip;
+          const ipEl = document.getElementById('hue-ip');
+          if (ipEl) ipEl.value = data.bridges[0].ip;
           alert(`Found Hue Bridge at: ${data.bridges[0].ip}`);
         } else {
           alert('Could not auto-detect Bridge via cloud. Please enter the Bridge IP shown in your Hue iPhone app.');
@@ -947,7 +1184,8 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
   const pairFeedback = document.getElementById('hue-pair-feedback');
   if (btnPairHue) {
     btnPairHue.addEventListener('click', async () => {
-      const ip = document.getElementById('hue-ip').value.trim();
+      const ipEl = document.getElementById('hue-ip');
+      const ip = ipEl ? ipEl.value.trim() : '';
       if (!ip) {
         alert('Please enter your Hue Bridge IP first.');
         return;
@@ -965,7 +1203,8 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
         });
         const data = await res.json();
         if (data.success) {
-          document.getElementById('hue-user').value = data.username;
+          const userEl = document.getElementById('hue-user');
+          if (userEl) userEl.value = data.username;
           if (pairFeedback) {
             pairFeedback.style.color = '#4ade80';
             pairFeedback.textContent = '✅ Bridge paired successfully! Application Key saved.';
@@ -997,13 +1236,15 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
       if (select && data.success && data.rooms && data.rooms.length > 0) {
         select.innerHTML = '<option value="">-- Select Your Room / Group --</option>';
         data.rooms.forEach(r => {
-          select.innerHTML += `<option value="${r.id}">${r.name} (${r.type || 'Room'})</option>`;
+          select.innerHTML += `<option value="${r.id}">${escapeHtml(r.name)} (${escapeHtml(r.type || 'Room')})</option>`;
         });
         select.style.display = 'block';
         select.addEventListener('change', () => {
           if (select.value) {
-            document.getElementById('hue-target-id').value = select.value;
-            document.getElementById('hue-target-type').value = 'group';
+            const targetEl = document.getElementById('hue-target-id');
+            if (targetEl) targetEl.value = select.value;
+            const typeEl = document.getElementById('hue-target-type');
+            if (typeEl) typeEl.value = 'group';
           }
         });
       }
@@ -1029,27 +1270,46 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
     });
   }
 
-
   // Copy YAML
-  elements.btnCopyYaml.addEventListener('click', () => {
-    const yaml = elements.haYamlBlock.innerText;
-    navigator.clipboard.writeText(yaml);
-    elements.btnCopyYaml.textContent = '✅ Copied!';
-    setTimeout(() => { elements.btnCopyYaml.textContent = '📋 Copy YAML'; }, 2000);
-  });
+  if (elements.btnCopyYaml) {
+    elements.btnCopyYaml.addEventListener('click', () => {
+      if (elements.haYamlBlock) {
+        const yaml = elements.haYamlBlock.innerText;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(yaml).catch(() => {});
+        }
+        elements.btnCopyYaml.textContent = '✅ Copied!';
+        setTimeout(() => {
+          if (elements.btnCopyYaml) elements.btnCopyYaml.textContent = '📋 Copy YAML';
+        }, 2000);
+      }
+    });
+  }
 
   // Copy Webhook URLs
-  elements.btnCopyWebhookUrl.addEventListener('click', () => {
-    navigator.clipboard.writeText(elements.webhookUrlDisplay.textContent);
-    elements.btnCopyWebhookUrl.textContent = 'Copied!';
-    setTimeout(() => { elements.btnCopyWebhookUrl.textContent = 'Copy'; }, 2000);
-  });
+  if (elements.btnCopyWebhookUrl) {
+    elements.btnCopyWebhookUrl.addEventListener('click', () => {
+      if (elements.webhookUrlDisplay && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(elements.webhookUrlDisplay.textContent).catch(() => {});
+        elements.btnCopyWebhookUrl.textContent = 'Copied!';
+        setTimeout(() => {
+          if (elements.btnCopyWebhookUrl) elements.btnCopyWebhookUrl.textContent = 'Copy';
+        }, 2000);
+      }
+    });
+  }
 
-  elements.btnCopyEspnUrl.addEventListener('click', () => {
-    navigator.clipboard.writeText(elements.webhookEspnUrlDisplay.textContent);
-    elements.btnCopyEspnUrl.textContent = 'Copied!';
-    setTimeout(() => { elements.btnCopyEspnUrl.textContent = 'Copy'; }, 2000);
-  });
+  if (elements.btnCopyEspnUrl) {
+    elements.btnCopyEspnUrl.addEventListener('click', () => {
+      if (elements.webhookEspnUrlDisplay && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(elements.webhookEspnUrlDisplay.textContent).catch(() => {});
+        elements.btnCopyEspnUrl.textContent = 'Copied!';
+        setTimeout(() => {
+          if (elements.btnCopyEspnUrl) elements.btnCopyEspnUrl.textContent = 'Copy';
+        }, 2000);
+      }
+    });
+  }
 
   // Webhook Tester Presets
   const presets = {
@@ -1059,47 +1319,72 @@ document.getElementById('btn-sim-reset').addEventListener('click', async () => {
     liverpool: { team: 'liverpool', event: 'GOAL', player: 'Mohamed Salah', scoreTeam: 3, scoreOpponent: 1 }
   };
 
-  document.getElementById('btn-preset-canes').addEventListener('click', () => {
-    elements.testWebhookPayload.value = JSON.stringify(presets.canes, null, 2);
-  });
-  document.getElementById('btn-preset-wolfpack').addEventListener('click', () => {
-    elements.testWebhookPayload.value = JSON.stringify(presets.wolfpack, null, 2);
-  });
-  document.getElementById('btn-preset-vikings').addEventListener('click', () => {
-    elements.testWebhookPayload.value = JSON.stringify(presets.vikings, null, 2);
-  });
-  document.getElementById('btn-preset-liverpool').addEventListener('click', () => {
-    elements.testWebhookPayload.value = JSON.stringify(presets.liverpool, null, 2);
-  });
+  const btnPresetCanes = document.getElementById('btn-preset-canes');
+  if (btnPresetCanes) {
+    btnPresetCanes.addEventListener('click', () => {
+      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.canes, null, 2);
+    });
+  }
+
+  const btnPresetWolf = document.getElementById('btn-preset-wolfpack');
+  if (btnPresetWolf) {
+    btnPresetWolf.addEventListener('click', () => {
+      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.wolfpack, null, 2);
+    });
+  }
+
+  const btnPresetVik = document.getElementById('btn-preset-vikings');
+  if (btnPresetVik) {
+    btnPresetVik.addEventListener('click', () => {
+      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.vikings, null, 2);
+    });
+  }
+
+  const btnPresetLiv = document.getElementById('btn-preset-liverpool');
+  if (btnPresetLiv) {
+    btnPresetLiv.addEventListener('click', () => {
+      if (elements.testWebhookPayload) elements.testWebhookPayload.value = JSON.stringify(presets.liverpool, null, 2);
+    });
+  }
 
   // Send Inbound Test Webhook
-  elements.btnSendTestWebhook.addEventListener('click', async () => {
-    elements.testWebhookResult.classList.remove('hidden');
-    elements.testWebhookResult.textContent = 'Sending webhook...';
+  if (elements.btnSendTestWebhook) {
+    elements.btnSendTestWebhook.addEventListener('click', async () => {
+      if (!elements.testWebhookResult || !elements.testWebhookPayload) return;
+      elements.testWebhookResult.classList.remove('hidden');
+      elements.testWebhookResult.textContent = 'Sending webhook...';
 
-    try {
-      const payload = JSON.parse(elements.testWebhookPayload.value);
-      const res = await fetch('/api/webhooks/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      elements.testWebhookResult.textContent = `Status ${res.status}:\n${JSON.stringify(data, null, 2)}`;
-    } catch (err) {
-      elements.testWebhookResult.textContent = `Error: ${err.message}`;
-    }
-  });
+      try {
+        const payload = JSON.parse(elements.testWebhookPayload.value);
+        const res = await fetch('/api/webhooks/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        elements.testWebhookResult.textContent = `Status ${res.status}:\n${JSON.stringify(data, null, 2)}`;
+      } catch (err) {
+        elements.testWebhookResult.textContent = `Error: ${err.message}`;
+      }
+    });
+  }
 
   // Clear Logs
-  elements.btnClearLogs.addEventListener('click', () => {
-    state.logs = [];
-    renderLogs();
-  });
+  if (elements.btnClearLogs) {
+    elements.btnClearLogs.addEventListener('click', () => {
+      state.logs = [];
+      renderLogs();
+    });
+  }
 }
 
 // Fetch Initial Teams Data
 async function loadTeams() {
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+  if (!isHttp || !isLocal) return;
+
   try {
     const res = await fetch('/api/teams');
     if (res.ok) {
@@ -1111,7 +1396,7 @@ async function loadTeams() {
       }
     }
   } catch (err) {
-    // Keep client-side fallback teams
+    // Keep client-side fallback
   }
 }
 
@@ -1124,6 +1409,7 @@ function initApp() {
   highlightActiveTeamCard(state.activeTeam);
   renderConfigForms();
   fetchHaYaml();
+  renderLogs();
   loadTeams();
   initSse();
 }
@@ -1133,5 +1419,3 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
-
-
