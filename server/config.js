@@ -235,8 +235,9 @@ export const DEFAULT_USER_CONFIG = {
     bridgeIp: '',
     username: '',
     targetType: 'group', // 'group' or 'light'
-    targetId: '1', // group id 1 or light id 1
-    useAlertStrobe: true
+    targetId: '1', // legacy single target ID
+    targetIds: ['1'], // multi-room target IDs
+    useAlertStrobe: false
   },
   // General options
   general: {
@@ -248,3 +249,4 @@ export const DEFAULT_USER_CONFIG = {
     soundVolume: 0.8
   }
 };
+

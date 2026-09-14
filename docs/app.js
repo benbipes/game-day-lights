@@ -33,7 +33,117 @@ class SoundSynthesizer {
     this.activeNodes = [];
   }
 
-  // 1. Carolina Hurricanes - NHL Brass Air Horn & Siren
+  // Helper: Play collegiate marching snare hit / cadence roll
+  playSnare(time, duration = 0.12, gainLevel = 0.15) {
+    if (!this.ctx) return;
+    const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1000, time);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(gainLevel, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    noise.start(time);
+    noise.stop(time + duration);
+    this.activeNodes.push(noise);
+  }
+
+  // Helper: Play stadium / marching bass drum
+  playBassDrum(time, startFreq = 120, endFreq = 38, duration = 0.5, gainLevel = 0.35) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(startFreq, time);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, time + duration);
+
+    gain.gain.setValueAtTime(gainLevel, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(time);
+    osc.stop(time + duration);
+    this.activeNodes.push(osc);
+  }
+
+  // Helper: Play rich brass lead note (Sawtooth + Square harmonic with lowpass envelope)
+  playBrassNote(freq, startTime, dur, vol = 0.16) {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const oscHarmonic = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    oscHarmonic.type = 'square';
+    oscHarmonic.frequency.setValueAtTime(freq * 2, startTime);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, startTime);
+    filter.frequency.linearRampToValueAtTime(2200, startTime + 0.04);
+    filter.frequency.exponentialRampToValueAtTime(1100, startTime + dur);
+
+    gain.gain.setValueAtTime(0.001, startTime);
+    gain.gain.linearRampToValueAtTime(vol, startTime + 0.035);
+    gain.gain.setValueAtTime(vol * 0.9, startTime + dur * 0.8);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+    osc.connect(filter);
+    oscHarmonic.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(startTime);
+    oscHarmonic.start(startTime);
+    osc.stop(startTime + dur + 0.05);
+    oscHarmonic.stop(startTime + dur + 0.05);
+    this.activeNodes.push(osc, oscHarmonic);
+  }
+
+  // Helper: Play church / cathedral pipe organ chord
+  playOrganChord(frequencies, startTime, dur, vol = 0.12) {
+    if (!this.ctx) return;
+    frequencies.forEach(f => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.1);
+      gain.gain.setValueAtTime(vol * 0.85, startTime + dur - 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + dur);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(startTime);
+      osc.stop(startTime + dur);
+      this.activeNodes.push(osc);
+    });
+  }
+
+  // 1. Carolina Hurricanes - "Brass Bonanza" Hockey Anthem, Warning Siren & Air Horn
   playNhlGoalHorn() {
     if (!this.enabled) return;
     this.init();
@@ -41,58 +151,75 @@ class SoundSynthesizer {
     this.stopAll();
 
     const now = this.ctx.currentTime;
-    const dur = 6.0;
 
-    // Chord: Bb3 (233.08 Hz), Db4 (277.18 Hz), F4 (349.23 Hz)
-    const freqs = [233.08, 277.18, 349.23, 116.54];
-    freqs.forEach((f, idx) => {
+    // Dual NHL Air Horn Chord Blast (Bb3, Db4, F4, Bb2)
+    const hornPitches = [233.08, 277.18, 349.23, 116.54];
+    hornPitches.forEach((f, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
       osc.type = idx === 3 ? 'sine' : 'sawtooth';
       osc.frequency.setValueAtTime(f, now);
-      osc.frequency.exponentialRampToValueAtTime(f * 1.015, now + dur);
-
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.2, now + 0.15);
-      gain.gain.setValueAtTime(0.18, now + dur - 0.5);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-
+      gain.gain.linearRampToValueAtTime(0.2, now + 0.12);
+      gain.gain.setValueAtTime(0.18, now + 1.8);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 2.2);
       osc.connect(gain);
       gain.connect(this.masterGain);
       osc.start(now);
-      osc.stop(now + dur);
+      osc.stop(now + 2.3);
       this.activeNodes.push(osc);
     });
 
-    // Emergency Warning Siren
+    // Emergency Storm Siren
     const sirenOsc = this.ctx.createOscillator();
     const sirenGain = this.ctx.createGain();
     const lfo = this.ctx.createOscillator();
     const lfoGain = this.ctx.createGain();
 
     sirenOsc.type = 'sawtooth';
-    sirenOsc.frequency.setValueAtTime(600, now);
-
-    lfo.frequency.setValueAtTime(1.8, now);
-    lfoGain.gain.setValueAtTime(250, now);
+    sirenOsc.frequency.setValueAtTime(550, now);
+    lfo.frequency.setValueAtTime(1.6, now);
+    lfoGain.gain.setValueAtTime(240, now);
     lfo.connect(sirenOsc.frequency);
 
     sirenGain.gain.setValueAtTime(0.001, now);
     sirenGain.gain.linearRampToValueAtTime(0.08, now + 0.3);
-    sirenGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    sirenGain.gain.exponentialRampToValueAtTime(0.001, now + 6.0);
 
     sirenOsc.connect(sirenGain);
     sirenGain.connect(this.masterGain);
-
     lfo.start(now);
     sirenOsc.start(now);
-    lfo.stop(now + dur);
-    sirenOsc.stop(now + dur);
+    lfo.stop(now + 6.0);
+    sirenOsc.stop(now + 6.0);
     this.activeNodes.push(sirenOsc, lfo);
+
+    // "Brass Bonanza" Hockey Brass Fanfare (starting at 0.8s)
+    const bonanzaMelody = [
+      { f: 392.00, t: 0.80, d: 0.18 }, // G4
+      { f: 392.00, t: 1.02, d: 0.18 }, // G4
+      { f: 440.00, t: 1.25, d: 0.18 }, // A4
+      { f: 493.88, t: 1.48, d: 0.22 }, // B4
+      { f: 587.33, t: 1.75, d: 0.35 }, // D5
+      { f: 493.88, t: 2.15, d: 0.22 }, // B4
+      { f: 392.00, t: 2.42, d: 0.22 }, // G4
+      { f: 440.00, t: 2.68, d: 0.45 }, // A4
+      { f: 293.66, t: 3.20, d: 0.30 }, // D4
+      { f: 392.00, t: 3.55, d: 0.18 }, // G4
+      { f: 493.88, t: 3.78, d: 0.20 }, // B4
+      { f: 587.33, t: 4.02, d: 0.22 }, // D5
+      { f: 523.25, t: 4.28, d: 0.22 }, // C5
+      { f: 493.88, t: 4.54, d: 0.22 }, // B4
+      { f: 440.00, t: 4.80, d: 0.35 }, // A4
+      { f: 392.00, t: 5.20, d: 0.65 }  // G4
+    ];
+
+    bonanzaMelody.forEach(note => {
+      this.playBrassNote(note.f, now + note.t, note.d, 0.15);
+    });
   }
 
-  // 2. Minnesota Vikings - Resonant Gjallarhorn & Stadium Pulse
+  // 2. Minnesota Vikings - "Skol, Vikings" Fight Song & Resonant Gjallarhorn
   playGjallarhorn() {
     if (!this.enabled) return;
     this.init();
@@ -102,26 +229,27 @@ class SoundSynthesizer {
     const now = this.ctx.currentTime;
     const dur = 7.0;
 
-    const pitches = [55, 110, 164.81];
-    pitches.forEach((freq) => {
+    // Resonant Acoustic Gjallarhorn Blast
+    const hornPitches = [55, 110, 164.81];
+    hornPitches.forEach((freq) => {
       const osc = this.ctx.createOscillator();
       const filter = this.ctx.createBiquadFilter();
       const gain = this.ctx.createGain();
 
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.linearRampToValueAtTime(freq * 1.03, now + 1.2);
+      osc.frequency.linearRampToValueAtTime(freq * 1.025, now + 1.2);
       osc.frequency.exponentialRampToValueAtTime(freq * 0.98, now + dur);
 
       filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(300, now);
-      filter.frequency.linearRampToValueAtTime(800, now + 1.0);
-      filter.frequency.exponentialRampToValueAtTime(220, now + dur);
+      filter.frequency.setValueAtTime(280, now);
+      filter.frequency.linearRampToValueAtTime(750, now + 1.0);
+      filter.frequency.exponentialRampToValueAtTime(200, now + dur);
       filter.Q.value = 4.0;
 
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.28, now + 0.5);
-      gain.gain.setValueAtTime(0.25, now + dur - 1.2);
+      gain.gain.linearRampToValueAtTime(0.24, now + 0.4);
+      gain.gain.setValueAtTime(0.20, now + dur - 1.2);
       gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
 
       osc.connect(filter);
@@ -133,28 +261,36 @@ class SoundSynthesizer {
       this.activeNodes.push(osc);
     });
 
+    // Rhythmic Skol Stadium Drums (4 deep stadium claps)
     for (let i = 0; i < 4; i++) {
-      const beatTime = now + (i * 1.4);
-      const drumOsc = this.ctx.createOscillator();
-      const drumGain = this.ctx.createGain();
-
-      drumOsc.type = 'sine';
-      drumOsc.frequency.setValueAtTime(120, beatTime);
-      drumOsc.frequency.exponentialRampToValueAtTime(35, beatTime + 0.5);
-
-      drumGain.gain.setValueAtTime(0.3, beatTime);
-      drumGain.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.55);
-
-      drumOsc.connect(drumGain);
-      drumGain.connect(this.masterGain);
-
-      drumOsc.start(beatTime);
-      drumOsc.stop(beatTime + 0.6);
-      this.activeNodes.push(drumOsc);
+      this.playBassDrum(now + (i * 1.4), 115, 32, 0.6, 0.32);
     }
+
+    // "Skol, Vikings" Fight Song Brass Melody ("Skol, Vikings, let's win this game...")
+    const skolMelody = [
+      { f: 233.08, t: 0.50, d: 0.35 }, // Bb3
+      { f: 293.66, t: 0.90, d: 0.35 }, // D4
+      { f: 349.23, t: 1.30, d: 0.40 }, // F4
+      { f: 466.16, t: 1.75, d: 0.60 }, // Bb4 ("Skol!")
+      { f: 440.00, t: 2.45, d: 0.28 }, // A4
+      { f: 392.00, t: 2.78, d: 0.28 }, // G4
+      { f: 349.23, t: 3.10, d: 0.45 }, // F4
+      { f: 392.00, t: 3.60, d: 0.28 }, // G4
+      { f: 349.23, t: 3.92, d: 0.28 }, // F4
+      { f: 293.66, t: 4.24, d: 0.32 }, // D4
+      { f: 233.08, t: 4.60, d: 0.50 }, // Bb3
+      { f: 261.63, t: 5.15, d: 0.25 }, // C4
+      { f: 293.66, t: 5.42, d: 0.25 }, // D4
+      { f: 311.13, t: 5.70, d: 0.30 }, // Eb4
+      { f: 349.23, t: 6.05, d: 0.65 }  // F4
+    ];
+
+    skolMelody.forEach(note => {
+      this.playBrassNote(note.f, now + note.t, note.d, 0.16);
+    });
   }
 
-  // 3. Liverpool FC - Anfield Roar & Goal Chimes
+  // 3. Liverpool FC - "You'll Never Walk Alone" Anthem, Pipe Organ & Anfield Roar
   playLiverpoolGoal() {
     if (!this.enabled) return;
     this.init();
@@ -162,15 +298,15 @@ class SoundSynthesizer {
     this.stopAll();
 
     const now = this.ctx.currentTime;
-    const dur = 6.0;
+    const dur = 6.5;
 
+    // Anfield Kop Crowd Roar (Resonant Filtered Bandpass Noise)
     const bufferSize = this.ctx.sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
       data[i] = Math.random() * 2 - 1;
     }
-
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
     noise.loop = true;
@@ -178,11 +314,11 @@ class SoundSynthesizer {
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.setValueAtTime(450, now);
-    filter.Q.value = 1.5;
+    filter.Q.value = 1.6;
 
     const noiseGain = this.ctx.createGain();
     noiseGain.gain.setValueAtTime(0.01, now);
-    noiseGain.linearRampToValueAtTime ? noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.8) : (noiseGain.gain.value = 0.18);
+    noiseGain.gain.linearRampToValueAtTime(0.18, now + 0.8);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
 
     noise.connect(filter);
@@ -193,79 +329,34 @@ class SoundSynthesizer {
     noise.stop(now + dur);
     this.activeNodes.push(noise);
 
-    const notes = [523.25, 659.25, 783.99, 1046.50];
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const noteTime = now + (idx * 0.18);
+    // Cathedral Organ Chords (C Maj -> Em -> F Maj -> G Maj)
+    this.playOrganChord([130.81, 164.81, 196.00], now + 0.2, 1.8, 0.10); // C major
+    this.playOrganChord([164.81, 196.00, 246.94], now + 2.0, 1.8, 0.10); // E minor
+    this.playOrganChord([174.61, 220.00, 261.63], now + 3.8, 1.4, 0.10); // F major
+    this.playOrganChord([196.00, 246.94, 293.66], now + 5.2, 1.3, 0.11); // G major
 
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, noteTime);
+    // "You'll Never Walk Alone" Anthem Lead Brass ("Walk on, walk on, with hope in your heart...")
+    const ynwaMelody = [
+      { f: 261.63, t: 0.30, d: 0.40 }, // C4 ("When")
+      { f: 329.63, t: 0.75, d: 0.40 }, // E4 ("you")
+      { f: 392.00, t: 1.20, d: 0.65 }, // G4 ("walk")
+      { f: 440.00, t: 1.90, d: 0.35 }, // A4 ("through")
+      { f: 392.00, t: 2.30, d: 0.40 }, // G4 ("a")
+      { f: 329.63, t: 2.75, d: 0.65 }, // E4 ("storm...")
+      { f: 349.23, t: 3.50, d: 0.35 }, // F4
+      { f: 392.00, t: 3.90, d: 0.35 }, // G4
+      { f: 329.63, t: 4.30, d: 0.50 }, // E4
+      { f: 293.66, t: 4.85, d: 0.35 }, // D4
+      { f: 261.63, t: 5.25, d: 0.85 }  // C4 ("Walk on!")
+    ];
 
-      gain.gain.setValueAtTime(0.15, noteTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 1.2);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-
-      osc.start(noteTime);
-      osc.stop(noteTime + 1.3);
-      this.activeNodes.push(osc);
+    ynwaMelody.forEach(note => {
+      this.playBrassNote(note.f, now + note.t, note.d, 0.14);
     });
   }
 
-  // 4. NC State Wolfpack - Collegiate Touchdown Fanfare & Siren
+  // 4. NC State Wolfpack - "The Red and White Song" Collegiate March & Siren
   playWolfpackTouchdown() {
-    if (!this.enabled) return;
-    this.init();
-    if (!this.ctx) return;
-    this.stopAll();
-
-    const now = this.ctx.currentTime;
-    const dur = 5.5;
-
-    const siren = this.ctx.createOscillator();
-    const sirenGain = this.ctx.createGain();
-
-    siren.type = 'sawtooth';
-    siren.frequency.setValueAtTime(250, now);
-    siren.frequency.exponentialRampToValueAtTime(950, now + 1.2);
-    siren.frequency.exponentialRampToValueAtTime(500, now + 2.5);
-    siren.frequency.exponentialRampToValueAtTime(900, now + 3.8);
-
-    sirenGain.gain.setValueAtTime(0.001, now);
-    sirenGain.gain.linearRampToValueAtTime(0.2, now + 0.3);
-    sirenGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-
-    siren.connect(sirenGain);
-    sirenGain.connect(this.masterGain);
-
-    siren.start(now);
-    siren.stop(now + dur);
-    this.activeNodes.push(siren);
-
-    [293.66, 369.99, 440].forEach((f) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(f, now);
-
-      gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.08, now + 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + dur - 1);
-
-      osc.connect(gain);
-      gain.connect(this.masterGain);
-
-      osc.start(now);
-      osc.stop(now + dur);
-      this.activeNodes.push(osc);
-    });
-  }
-
-  // 5. Tennessee Volunteers - Rocky Top Brass Fanfare & Neyland Cannon
-  playRockyTop() {
     if (!this.enabled) return;
     this.init();
     if (!this.ctx) return;
@@ -274,83 +365,110 @@ class SoundSynthesizer {
     const now = this.ctx.currentTime;
     const dur = 6.0;
 
-    // Neyland Stadium Celebration Cannon Blast
-    const cannonOsc = this.ctx.createOscillator();
-    const cannonGain = this.ctx.createGain();
-    cannonOsc.type = 'sine';
-    cannonOsc.frequency.setValueAtTime(100, now);
-    cannonOsc.frequency.exponentialRampToValueAtTime(25, now + 0.8);
+    // Carter-Finley Stadium Wolfpack Siren
+    const siren = this.ctx.createOscillator();
+    const sirenGain = this.ctx.createGain();
+    siren.type = 'sawtooth';
+    siren.frequency.setValueAtTime(260, now);
+    siren.frequency.exponentialRampToValueAtTime(920, now + 1.1);
+    siren.frequency.exponentialRampToValueAtTime(480, now + 2.2);
+    siren.frequency.exponentialRampToValueAtTime(880, now + 3.4);
 
-    cannonGain.gain.setValueAtTime(0.45, now);
-    cannonGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    sirenGain.gain.setValueAtTime(0.001, now);
+    sirenGain.gain.linearRampToValueAtTime(0.18, now + 0.25);
+    sirenGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
 
-    cannonOsc.connect(cannonGain);
-    cannonGain.connect(this.masterGain);
-    cannonOsc.start(now);
-    cannonOsc.stop(now + 0.95);
-    this.activeNodes.push(cannonOsc);
+    siren.connect(sirenGain);
+    sirenGain.connect(this.masterGain);
+    siren.start(now);
+    siren.stop(now + dur);
+    this.activeNodes.push(siren);
 
-    // Second Cannon blast
-    const cannon2 = this.ctx.createOscillator();
-    const cannon2Gain = this.ctx.createGain();
-    cannon2.type = 'triangle';
-    cannon2.frequency.setValueAtTime(80, now + 0.9);
-    cannon2.frequency.exponentialRampToValueAtTime(20, now + 1.6);
-    cannon2Gain.gain.setValueAtTime(0.35, now + 0.9);
-    cannon2Gain.gain.exponentialRampToValueAtTime(0.001, now + 1.7);
-    cannon2.connect(cannon2Gain);
-    cannon2Gain.connect(this.masterGain);
-    cannon2.start(now + 0.9);
-    cannon2.stop(now + 1.75);
-    this.activeNodes.push(cannon2);
+    // Marching Cadence Snare Drum & Bass Drum
+    for (let i = 0; i < 14; i++) {
+      const snareTime = now + 0.4 + (i * 0.32);
+      this.playSnare(snareTime, 0.08, 0.12);
+      if (i % 2 === 0) {
+        this.playBassDrum(snareTime, 120, 40, 0.35, 0.28);
+      }
+    }
 
-    // Up-tempo Rocky Top Brass Chorus
-    const melody = [
-      { f: 293.66, t: 0.15, d: 0.22 },
-      { f: 369.99, t: 0.40, d: 0.22 },
-      { f: 440.00, t: 0.65, d: 0.35 },
-      { f: 493.88, t: 1.05, d: 0.25 },
-      { f: 440.00, t: 1.35, d: 0.25 },
-      { f: 369.99, t: 1.65, d: 0.30 },
-      { f: 293.66, t: 2.00, d: 0.45 },
-      { f: 329.63, t: 2.50, d: 0.25 },
-      { f: 369.99, t: 2.80, d: 0.25 },
-      { f: 293.66, t: 3.10, d: 0.55 },
-      { f: 293.66, t: 3.70, d: 0.25 },
-      { f: 293.66, t: 4.00, d: 0.70 }
+    // "The Red and White Song" Collegiate Fight Song Fanfare ("We're the Red and White from State...")
+    const redWhiteMelody = [
+      { f: 261.63, t: 0.40, d: 0.22 }, // C4 ("We're")
+      { f: 329.63, t: 0.65, d: 0.22 }, // E4 ("the")
+      { f: 392.00, t: 0.90, d: 0.28 }, // G4 ("Red")
+      { f: 392.00, t: 1.22, d: 0.20 }, // G4 ("and")
+      { f: 440.00, t: 1.45, d: 0.28 }, // A4 ("White")
+      { f: 392.00, t: 1.78, d: 0.30 }, // G4 ("from")
+      { f: 329.63, t: 2.12, d: 0.45 }, // E4 ("State!")
+      { f: 261.63, t: 2.65, d: 0.25 }, // C4 ("and")
+      { f: 293.66, t: 2.95, d: 0.25 }, // D4 ("we")
+      { f: 329.63, t: 3.25, d: 0.25 }, // E4 ("know")
+      { f: 349.23, t: 3.55, d: 0.28 }, // F4 ("we")
+      { f: 392.00, t: 3.88, d: 0.32 }, // G4 ("are")
+      { f: 329.63, t: 4.25, d: 0.30 }, // E4 ("the")
+      { f: 261.63, t: 4.60, d: 0.35 }, // C4 ("best!")
+      { f: 293.66, t: 5.00, d: 0.25 }, // D4 ("Go")
+      { f: 261.63, t: 5.30, d: 0.65 }  // C4 ("State!")
     ];
 
-    melody.forEach((note) => {
-      const noteTime = now + note.t;
-      const osc = this.ctx.createOscillator();
-      const oscHarmonic = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      const gain = this.ctx.createGain();
+    redWhiteMelody.forEach(note => {
+      this.playBrassNote(note.f, now + note.t, note.d, 0.16);
+    });
+  }
 
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(note.f, noteTime);
+  // 5. Tennessee Volunteers - "Rocky Top" Fight Song Fanfare, Snare Cadence & Neyland Cannon
+  playRockyTop() {
+    if (!this.enabled) return;
+    this.init();
+    if (!this.ctx) return;
+    this.stopAll();
 
-      oscHarmonic.type = 'square';
-      oscHarmonic.frequency.setValueAtTime(note.f * 2, noteTime);
+    const now = this.ctx.currentTime;
+    const dur = 6.5;
 
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1400, noteTime);
+    // Neyland Stadium Celebration Cannon Blast #1
+    this.playBassDrum(now, 130, 24, 0.9, 0.55);
+    this.playSnare(now, 0.45, 0.28);
 
-      gain.gain.setValueAtTime(0.001, noteTime);
-      gain.gain.linearRampToValueAtTime(0.18, noteTime + 0.04);
-      gain.gain.setValueAtTime(0.16, noteTime + note.d * 0.75);
-      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + note.d);
+    // Marching Band Snare Drum Cadence
+    for (let i = 0; i < 16; i++) {
+      const beatTime = now + 0.25 + (i * 0.26);
+      this.playSnare(beatTime, 0.08, 0.14);
+      if (i % 2 === 0) {
+        this.playBassDrum(beatTime, 110, 38, 0.3, 0.26);
+      }
+    }
 
-      osc.connect(filter);
-      oscHarmonic.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.masterGain);
+    // Neyland Stadium Celebration Cannon Blast #2 (at crescendo)
+    this.playBassDrum(now + 4.8, 125, 22, 0.95, 0.55);
+    this.playSnare(now + 4.8, 0.5, 0.30);
 
-      osc.start(noteTime);
-      oscHarmonic.start(noteTime);
-      osc.stop(noteTime + note.d + 0.05);
-      oscHarmonic.stop(noteTime + note.d + 0.05);
-      this.activeNodes.push(osc, oscHarmonic);
+    // Up-tempo "Rocky Top" Brass Chorus ("Rocky Top, you'll always be, home sweet home to me...")
+    const rockyTopMelody = [
+      { f: 293.66, t: 0.25, d: 0.20 }, // D4 ("Rock-")
+      { f: 369.99, t: 0.48, d: 0.20 }, // F#4 ("-y")
+      { f: 440.00, t: 0.70, d: 0.32 }, // A4 ("Top,")
+      { f: 493.88, t: 1.08, d: 0.22 }, // B4 ("you'll")
+      { f: 440.00, t: 1.34, d: 0.22 }, // A4 ("al-")
+      { f: 369.99, t: 1.60, d: 0.28 }, // F#4 ("-ways")
+      { f: 293.66, t: 1.92, d: 0.40 }, // D4 ("be,")
+      { f: 329.63, t: 2.38, d: 0.22 }, // E4 ("home")
+      { f: 369.99, t: 2.64, d: 0.22 }, // F#4 ("sweet")
+      { f: 293.66, t: 2.90, d: 0.48 }, // D4 ("home")
+      { f: 293.66, t: 3.44, d: 0.22 }, // D4 ("to")
+      { f: 293.66, t: 3.70, d: 0.45 }, // D4 ("me!")
+      { f: 369.99, t: 4.22, d: 0.22 }, // F#4 ("Good")
+      { f: 440.00, t: 4.48, d: 0.25 }, // A4 ("ol'")
+      { f: 493.88, t: 4.78, d: 0.35 }, // B4 ("Rock-")
+      { f: 440.00, t: 5.18, d: 0.28 }, // A4 ("-y")
+      { f: 369.99, t: 5.50, d: 0.30 }, // F#4 ("Top,")
+      { f: 293.66, t: 5.85, d: 0.65 }  // D4 ("Ten-nes-see!")
+    ];
+
+    rockyTopMelody.forEach(note => {
+      this.playBrassNote(note.f, now + note.t, note.d, 0.17);
     });
   }
 
@@ -901,9 +1019,19 @@ function renderConfigForms() {
   const hueTypeEl = document.getElementById('hue-target-type');
   if (hueTypeEl) hueTypeEl.value = hue.targetType || 'group';
   const hueTargetIdEl = document.getElementById('hue-target-id');
-  if (hueTargetIdEl) hueTargetIdEl.value = hue.targetId || '1';
+  if (hueTargetIdEl) {
+    if (Array.isArray(hue.targetIds) && hue.targetIds.length > 0) {
+      hueTargetIdEl.value = hue.targetIds.join(', ');
+    } else {
+      hueTargetIdEl.value = hue.targetId || '1';
+    }
+  }
   const hueAlertEl = document.getElementById('hue-alert-strobe');
   if (hueAlertEl) hueAlertEl.checked = !!hue.useAlertStrobe;
+
+  if (typeof cachedHueRooms !== 'undefined' && cachedHueRooms && cachedHueRooms.length > 0) {
+    renderRoomsGrid(cachedHueRooms);
+  }
 
   const origin = window.location.origin || 'http://localhost:3300';
   if (elements.webhookUrlDisplay) {
@@ -1294,9 +1422,26 @@ function runLocalCelebration(teamId, eventName = 'GOAL') {
   const colors = team.celebration?.colors || [[255, 0, 0], [255, 255, 255]];
   const intervalMs = team.celebration?.flashIntervalMs || 250;
 
+  // Non-repeating random color selector from team celebration colors
+  let lastColorIdx = -1;
+  const getNextRandomColor = () => {
+    if (!colors || colors.length === 0) return [255, 255, 255];
+    if (colors.length === 1) return colors[0];
+    let nextIdx;
+    do {
+      nextIdx = Math.floor(Math.random() * colors.length);
+    } while (nextIdx === lastColorIdx);
+    lastColorIdx = nextIdx;
+    return colors[nextIdx];
+  };
+
+  // Immediate first flash
+  state.currentRgb = getNextRandomColor();
+  updateThemeColors();
+
   localFlashInterval = setInterval(() => {
     step++;
-    state.currentRgb = colors[step % colors.length];
+    state.currentRgb = getNextRandomColor();
     updateThemeColors();
   }, intervalMs);
 
@@ -1722,6 +1867,10 @@ function setupEventListeners() {
 
         btn.classList.add('active');
         targetPanel.classList.add('active');
+
+        if (tabId === 'tab-philips-hue' && typeof cachedHueRooms !== 'undefined' && cachedHueRooms.length === 0) {
+          fetchHueRooms();
+        }
       });
     });
   }
@@ -1757,21 +1906,22 @@ function setupEventListeners() {
       const username = (document.getElementById('hue-user')?.value || '').trim();
       const targetType = document.getElementById('hue-target-type')?.value || 'group';
       const targetId = (document.getElementById('hue-target-id')?.value || '1').trim();
-      const useAlertStrobe = document.getElementById('hue-alert-strobe')?.checked ?? true;
+      const useAlertStrobe = document.getElementById('hue-alert-strobe')?.checked ?? false;
       const enabled = document.getElementById('hue-enabled')?.checked ?? true;
-
+      const targetIds = targetId.split(/[, ]+/).filter(Boolean);
       const updatedHue = {
         enabled,
         bridgeIp,
         username,
         targetType,
         targetId,
+        targetIds: targetIds.length > 0 ? targetIds : ['1'],
         useAlertStrobe
       };
 
       await saveConfig({ philipsHue: updatedHue });
       renderConfigForms();
-      alert(`✅ Philips Hue settings saved!\n\nBridge IP: ${bridgeIp || '(none entered)'}\nTarget: ${targetType} ${targetId}`);
+      alert(`✅ Philips Hue settings saved!\n\nBridge IP: ${bridgeIp || '(none entered)'}\nTarget(s): ${targetType} ${targetIds.join(', ')}`);
     });
   }
 
@@ -1956,16 +2106,96 @@ function setupEventListeners() {
     });
   }
 
-  function populateRoomsDropdown(rooms) {
-    const select = document.getElementById('hue-room-select');
-    if (!select || !rooms || rooms.length === 0) return;
-    select.innerHTML = `<option value="">-- Select Your Room / Group (${rooms.length} found) --</option>`;
-    const currentTargetId = document.getElementById('hue-target-id')?.value || state.config.philipsHue?.targetId || '1';
-    rooms.forEach(r => {
-      const isSelected = String(r.id) === String(currentTargetId) ? ' selected' : '';
-      select.innerHTML += `<option value="${r.id}"${isSelected}>${escapeHtml(r.name)} (${escapeHtml(r.type || 'Room')}) [ID: ${r.id}]</option>`;
+  let cachedHueRooms = [];
+
+  function getCurrentlySelectedTargetIds() {
+    const rawInput = (document.getElementById('hue-target-id')?.value || '').trim();
+    if (rawInput) {
+      return [...new Set(rawInput.split(/[, ]+/).filter(Boolean))];
+    }
+    if (Array.isArray(state.config?.philipsHue?.targetIds) && state.config.philipsHue.targetIds.length > 0) {
+      return state.config.philipsHue.targetIds.map(String);
+    }
+    if (state.config?.philipsHue?.targetId) {
+      return [String(state.config.philipsHue.targetId)];
+    }
+    return ['1'];
+  }
+
+  function renderRoomsGrid(rooms) {
+    const grid = document.getElementById('hue-rooms-grid');
+    if (!grid) return;
+    if (!rooms || rooms.length === 0) {
+      grid.innerHTML = `
+        <div class="rooms-placeholder" style="grid-column: 1 / -1; padding: 0.8rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px;">
+          No rooms found. Check your Bridge IP and Username.
+        </div>
+      `;
+      grid.style.display = 'block';
+      return;
+    }
+
+    cachedHueRooms = rooms;
+    const selectedIds = getCurrentlySelectedTargetIds();
+
+    grid.innerHTML = rooms.map(r => {
+      const isSelected = selectedIds.includes(String(r.id));
+      const lightCount = Array.isArray(r.lights) ? r.lights.length : 0;
+      return `
+        <div class="hue-room-card ${isSelected ? 'selected' : ''}" data-room-id="${r.id}">
+          <input type="checkbox" class="hue-room-checkbox" value="${r.id}" ${isSelected ? 'checked' : ''}>
+          <div class="hue-room-details">
+            <span class="hue-room-title">${escapeHtml(r.name)}</span>
+            <span class="hue-room-meta">
+              <span>${escapeHtml(r.type || 'Room')}</span>
+              <span class="hue-room-badge">ID: ${r.id}</span>
+              ${lightCount > 0 ? `<span class="hue-room-badge">${lightCount} 💡</span>` : ''}
+            </span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    grid.style.display = 'grid';
+
+    // Add click listeners to cards and checkboxes
+    grid.querySelectorAll('.hue-room-card').forEach(card => {
+      card.addEventListener('click', async (e) => {
+        const checkbox = card.querySelector('.hue-room-checkbox');
+        if (e.target !== checkbox) {
+          checkbox.checked = !checkbox.checked;
+        }
+        card.classList.toggle('selected', checkbox.checked);
+
+        // Gather all selected IDs
+        const checkedCards = grid.querySelectorAll('.hue-room-checkbox:checked');
+        let newSelectedIds = Array.from(checkedCards).map(cb => cb.value);
+        if (newSelectedIds.length === 0 && checkbox.checked === false) {
+          // Keep at least the clicked one if none selected or allow none
+        }
+
+        const targetEl = document.getElementById('hue-target-id');
+        if (targetEl) {
+          targetEl.value = newSelectedIds.join(', ');
+        }
+
+        const typeEl = document.getElementById('hue-target-type');
+        if (typeEl) typeEl.value = 'group';
+
+        await saveConfig({
+          philipsHue: {
+            ...state.config.philipsHue,
+            targetType: 'group',
+            targetId: newSelectedIds.join(', '),
+            targetIds: newSelectedIds
+          }
+        });
+      });
     });
-    select.style.display = 'block';
+  }
+
+  function populateRoomsDropdown(rooms) {
+    renderRoomsGrid(rooms);
   }
 
   // Fetch Rooms
@@ -1996,16 +2226,16 @@ function setupEventListeners() {
           const rooms = [];
           if (typeof groups === 'object' && !groups.error) {
             for (const [id, grp] of Object.entries(groups)) {
-              rooms.push({ id, name: grp.name, type: grp.type || 'Room' });
+              rooms.push({ id, name: grp.name, type: grp.type || 'Room', lights: grp.lights || [] });
             }
           }
           if (rooms.length > 0) {
             populateRoomsDropdown(rooms);
-            alert(`✅ Successfully loaded ${rooms.length} rooms! Pick your room from the dropdown.`);
+            alert(`✅ Successfully loaded ${rooms.length} rooms!`);
             return;
           }
         } catch (parseErr) {
-          alert('Could not parse JSON. You can also just type your room number directly into "Target ID" (e.g. 1).');
+          alert('Could not parse JSON. You can also just type your room numbers directly into "Target ID" (e.g. 1, 81).');
         }
       }
       return;
@@ -2019,33 +2249,39 @@ function setupEventListeners() {
       if (res.ok && res.data && res.data.rooms && res.data.rooms.length > 0) {
         populateRoomsDropdown(res.data.rooms);
         if (btnFetchRooms) btnFetchRooms.textContent = '✅ Loaded!';
-        setTimeout(() => { if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Refresh'; }, 2500);
+        setTimeout(() => { if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms'; }, 2500);
       } else {
         const msg = res.data?.error || res.error || 'Could not reach bridge';
         alert(`Could not load rooms: ${msg}\nEnsure your Hue Bridge IP and Username are correct.`);
-        if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Refresh';
+        if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
       }
     } catch (e) {
-      if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Refresh';
+      if (btnFetchRooms) btnFetchRooms.textContent = '🔄 Load / Refresh Rooms';
     }
   }
 
-  const roomSelect = document.getElementById('hue-room-select');
-  if (roomSelect) {
-    roomSelect.addEventListener('change', async () => {
-      if (roomSelect.value) {
-        const targetEl = document.getElementById('hue-target-id');
-        if (targetEl) targetEl.value = roomSelect.value;
-        const typeEl = document.getElementById('hue-target-type');
-        if (typeEl) typeEl.value = 'group';
-        await saveConfig({
-          philipsHue: {
-            ...state.config.philipsHue,
-            targetType: 'group',
-            targetId: roomSelect.value
-          }
+  // Manual Target ID input synchronization
+  const targetIdInput = document.getElementById('hue-target-id');
+  if (targetIdInput) {
+    targetIdInput.addEventListener('change', async () => {
+      const selectedIds = getCurrentlySelectedTargetIds();
+      const grid = document.getElementById('hue-rooms-grid');
+      if (grid) {
+        grid.querySelectorAll('.hue-room-card').forEach(card => {
+          const id = card.getAttribute('data-room-id');
+          const isSel = selectedIds.includes(String(id));
+          card.classList.toggle('selected', isSel);
+          const cb = card.querySelector('.hue-room-checkbox');
+          if (cb) cb.checked = isSel;
         });
       }
+      await saveConfig({
+        philipsHue: {
+          ...state.config.philipsHue,
+          targetId: targetIdInput.value,
+          targetIds: selectedIds
+        }
+      });
     });
   }
 
@@ -2483,6 +2719,13 @@ function initApp() {
   syncServerConfig();
   initSse();
   fetchLiveSports(false);
+
+  // Auto-load Hue rooms if bridge is configured
+  setTimeout(() => {
+    if (state.config.philipsHue?.bridgeIp && state.config.philipsHue?.username) {
+      fetchHueRooms();
+    }
+  }, 800);
 
   // Background auto-refresh of live sports every 30 seconds
   setInterval(() => {

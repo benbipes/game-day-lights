@@ -33,6 +33,9 @@ export class LightService {
     this.currentLightColor = TEAMS[this.currentTeamId]?.ambientRgb || [200, 16, 46];
     this.activeCelebrationTimer = null;
     this.activeFlashInterval = null;
+    this.activeHardwareStrobeInterval = null;
+    this.lastStrobeColorIdx = -1;
+    this.previousStates = {};
     this.flashStep = 0;
     this.logs = [];
     this.stateListeners = [];
@@ -171,7 +174,91 @@ export class LightService {
     }
   }
 
-  async dispatchHueBridge(bodyPayload) {
+  getTargetIds() {
+    const hue = this.config.philipsHue;
+    if (!hue) return [];
+    const ids = [];
+    if (Array.isArray(hue.targetIds) && hue.targetIds.length > 0) {
+      ids.push(...hue.targetIds);
+    } else if (hue.targetId) {
+      String(hue.targetId).split(/[, ]+/).filter(Boolean).forEach(id => ids.push(id));
+    }
+    return [...new Set(ids.map(id => String(id).trim()))].filter(Boolean);
+  }
+
+  async captureTargetState(targetId) {
+    const hue = this.config.philipsHue;
+    if (!hue || !hue.enabled) return null;
+    const cleanIp = (hue.bridgeIp || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    if (!cleanIp || !hue.username) return null;
+
+    const isGroup = (hue.targetType || 'group') === 'group';
+    const path = isGroup
+      ? `/api/${hue.username}/groups/${targetId}`
+      : `/api/${hue.username}/lights/${targetId}`;
+
+    try {
+      const res = await this.fetchHue(cleanIp, path, { method: 'GET', timeout: 3500 });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || data.error) return null;
+
+      if (isGroup) {
+        const wasOn = Boolean(data.state?.any_on ?? data.action?.on);
+        return {
+          targetId: String(targetId),
+          isGroup: true,
+          name: data.name,
+          wasOn,
+          bri: data.action?.bri ?? 254,
+          xy: data.action?.xy,
+          ct: data.action?.ct,
+          colormode: data.action?.colormode || 'xy',
+          rawAction: data.action
+        };
+      } else {
+        const wasOn = Boolean(data.state?.on);
+        return {
+          targetId: String(targetId),
+          isGroup: false,
+          name: data.name,
+          wasOn,
+          bri: data.state?.bri ?? 254,
+          xy: data.state?.xy,
+          ct: data.state?.ct,
+          colormode: data.state?.colormode || 'xy',
+          rawState: data.state
+        };
+      }
+    } catch (err) {
+      return null;
+    }
+  }
+
+  async dispatchSingleHueTarget(cleanIp, username, targetType, targetId, bodyPayload) {
+    const isGroup = (targetType || 'group') === 'group';
+    const path = isGroup
+      ? `/api/${username}/groups/${targetId}/action`
+      : `/api/${username}/lights/${targetId}/state`;
+
+    const startTime = Date.now();
+    try {
+      const res = await this.fetchHue(cleanIp, path, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload),
+        timeout: 4000
+      });
+      const latency = Date.now() - startTime;
+      const data = await res.json().catch(() => null);
+      const isOk = res.ok && (!Array.isArray(data) || !data[0]?.error);
+      return { success: isOk, targetId: String(targetId), data, latencyMs: latency, status: res.status };
+    } catch (err) {
+      return { success: false, targetId: String(targetId), error: err.message };
+    }
+  }
+
+  async dispatchHueBridge(bodyPayload, specificTargetId = null) {
     const hue = this.config.philipsHue;
     if (!hue || !hue.enabled) return { skipped: true, reason: 'Disabled' };
 
@@ -179,33 +266,26 @@ export class LightService {
     if (!cleanIp || !hue.username) {
       return { skipped: true, reason: 'Hue Bridge IP or username not configured' };
     }
-    const path = hue.targetType === 'group'
-      ? `/api/${hue.username}/groups/${hue.targetId}/action`
-      : `/api/${hue.username}/lights/${hue.targetId}/state`;
 
-    const startTime = Date.now();
-    try {
-      const res = await this.fetchHue(cleanIp, path, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
-      });
-      const latency = Date.now() - startTime;
-      const data = await res.json().catch(() => null);
-      const isOk = res.ok && (!Array.isArray(data) || !data[0]?.error);
-
-      this.addLog('Philips Hue', 'BRIDGE_COMMAND', {
-        target: `${hue.targetType} ${hue.targetId}`,
-        payload: bodyPayload,
-        response: data,
-        status: res.status,
-        latencyMs: latency
-      }, isOk);
-      return { success: isOk, data };
-    } catch (err) {
-      this.addLog('Philips Hue', 'BRIDGE_ERROR', { path, error: err.message }, false);
-      return { success: false, error: err.message };
+    const targets = specificTargetId ? [String(specificTargetId)] : this.getTargetIds();
+    if (targets.length === 0) {
+      return { skipped: true, reason: 'No Hue target room or light configured' };
     }
+
+    const results = await Promise.allSettled(
+      targets.map(id => this.dispatchSingleHueTarget(cleanIp, hue.username, hue.targetType || 'group', id, bodyPayload))
+    );
+
+    const outcomes = results.map(r => r.status === 'fulfilled' ? r.value : { success: false, error: r.reason?.message });
+    const allOk = outcomes.length > 0 && outcomes.every(o => o.success);
+
+    this.addLog('Philips Hue', 'BRIDGE_COMMAND', {
+      targets,
+      payload: bodyPayload,
+      outcomes
+    }, allOk);
+
+    return { success: allOk, outcomes };
   }
 
   // --- Hue Bridge Auto-Discovery & Pairing ---
@@ -338,12 +418,22 @@ export class LightService {
     this.currentMode = 'celebration';
     this.flashStep = 0;
 
-    // Clear existing celebration
-    if (this.activeFlashInterval) clearInterval(this.activeFlashInterval);
-    if (this.activeCelebrationTimer) clearTimeout(this.activeCelebrationTimer);
+    // Clear existing celebration loops and timers
+    if (this.activeFlashInterval) {
+      clearInterval(this.activeFlashInterval);
+      this.activeFlashInterval = null;
+    }
+    if (this.activeHardwareStrobeInterval) {
+      clearInterval(this.activeHardwareStrobeInterval);
+      this.activeHardwareStrobeInterval = null;
+    }
+    if (this.activeCelebrationTimer) {
+      clearTimeout(this.activeCelebrationTimer);
+      this.activeCelebrationTimer = null;
+    }
 
     const celebration = team.celebration;
-    const celebrationColors = celebration.colors;
+    const celebrationColors = celebration.colors || [team.ambientRgb];
     const durationMs = (this.config.general.celebrationDurationSeconds || 12) * 1000;
     const flashIntervalMs = celebration.flashIntervalMs || 250;
 
@@ -369,26 +459,69 @@ export class LightService {
       duration_seconds: Math.round(durationMs / 1000)
     });
 
-    // Native Hue Alert Mode (lselect triggers a 15-second breathing flash)
-    if (this.config.philipsHue.useAlertStrobe) {
-      const firstCelebrationRgb = celebrationColors[0];
-      const xy = rgbToXy(firstCelebrationRgb[0], firstCelebrationRgb[1], firstCelebrationRgb[2]);
-      this.dispatchHueBridge({
-        on: true,
-        xy,
-        bri: 254,
-        alert: 'lselect'
-      });
-    }
-
     // Home Assistant REST Flash
     this.dispatchHomeAssistantService(celebrationColors[0], 254, 'long');
 
-    // Virtual & Software Strobe Loop for real-time visualization and rapid hardware cycling
+    // 1. CAPTURE EXACT CURRENT LIGHT STATE FOR ALL TARGET ROOMS
+    const targetIds = this.getTargetIds();
+    this.previousStates = {};
+    if (this.config.philipsHue?.enabled) {
+      await Promise.allSettled(
+        targetIds.map(async (id) => {
+          const state = await this.captureTargetState(id);
+          if (state) {
+            this.previousStates[id] = state;
+          }
+        })
+      );
+      this.addLog('Philips Hue', 'STATE_SNAPSHOT_CAPTURED', {
+        targets: targetIds,
+        snapshotCount: Object.keys(this.previousStates).length,
+        states: this.previousStates
+      });
+    }
+
+    // Helper for non-repeating random color picker from team palette
+    const getRandomTeamColor = () => {
+      if (!celebrationColors || celebrationColors.length === 0) return [255, 255, 255];
+      if (celebrationColors.length === 1) return celebrationColors[0];
+      let nextIdx;
+      do {
+        nextIdx = Math.floor(Math.random() * celebrationColors.length);
+      } while (nextIdx === this.lastStrobeColorIdx);
+      this.lastStrobeColorIdx = nextIdx;
+      return celebrationColors[nextIdx];
+    };
+
+    // Helper to send a fast Hue color strobe
+    const sendHardwareFlash = (rgb) => {
+      const xy = rgbToXy(rgb[0], rgb[1], rgb[2]);
+      const bri = (rgb[0] < 25 && rgb[1] < 25 && rgb[2] < 25) ? 60 : 254;
+      this.dispatchHueBridge({
+        on: true,
+        xy,
+        bri,
+        alert: 'none',
+        transitiontime: 1
+      });
+    };
+
+    // 2. DISPATCH FIRST COLOR FLASH TO HARDWARE IMMEDIATELY
+    const firstColor = getRandomTeamColor();
+    sendHardwareFlash(firstColor);
+
+    // 3. HARDWARE MULTI-COLOR RANDOM STROBE LOOP (~450ms cadence safe for Zigbee mesh)
+    const hardwareCadenceMs = Math.max(flashIntervalMs, 450);
+    this.activeHardwareStrobeInterval = setInterval(() => {
+      const nextRgb = getRandomTeamColor();
+      sendHardwareFlash(nextRgb);
+    }, hardwareCadenceMs);
+
+    // 4. SOFTWARE STROBE FOR REAL-TIME UI VISUALIZER AND SSE
     this.activeFlashInterval = setInterval(() => {
       this.flashStep++;
-      const colorIndex = this.flashStep % celebrationColors.length;
-      this.currentLightColor = celebrationColors[colorIndex];
+      const nextRgb = getRandomTeamColor();
+      this.currentLightColor = nextRgb;
       this.notifyStateChange({
         flashStep: this.flashStep,
         celebrationTitle: celebration.celebrationTitle,
@@ -397,7 +530,7 @@ export class LightService {
       });
     }, flashIntervalMs);
 
-    // Schedule celebration end & auto-restore to ambient
+    // 5. SCHEDULE CELEBRATION END & EXACT STATE RESTORATION
     this.activeCelebrationTimer = setTimeout(() => {
       this.endCelebration();
     }, durationMs);
@@ -411,10 +544,14 @@ export class LightService {
     });
   }
 
-  endCelebration() {
+  async endCelebration() {
     if (this.activeFlashInterval) {
       clearInterval(this.activeFlashInterval);
       this.activeFlashInterval = null;
+    }
+    if (this.activeHardwareStrobeInterval) {
+      clearInterval(this.activeHardwareStrobeInterval);
+      this.activeHardwareStrobeInterval = null;
     }
     if (this.activeCelebrationTimer) {
       clearTimeout(this.activeCelebrationTimer);
@@ -422,20 +559,64 @@ export class LightService {
     }
 
     const team = TEAMS[this.currentTeamId];
+    this.currentMode = 'ambient';
+    this.currentLightColor = team?.ambientRgb || [200, 16, 46];
+
+    const targetIds = this.getTargetIds();
+    const restoreOutcomes = {};
+
+    // Restore each room/light to its exact prior state
+    await Promise.allSettled(
+      targetIds.map(async (id) => {
+        const saved = this.previousStates[id];
+        if (saved) {
+          if (!saved.wasOn) {
+            // Room/light was previously OFF -> Turn it back OFF
+            restoreOutcomes[id] = { action: 'turn_off' };
+            await this.dispatchHueBridge({ on: false, alert: 'none' }, id);
+          } else {
+            // Room/light was previously ON -> Restore exact brightness and color/temperature
+            const restorePayload = {
+              on: true,
+              bri: saved.bri ?? 254,
+              alert: 'none',
+              transitiontime: 15
+            };
+            if (saved.colormode === 'ct' && saved.ct) {
+              restorePayload.ct = saved.ct;
+            } else if (saved.xy && Array.isArray(saved.xy)) {
+              restorePayload.xy = saved.xy;
+            } else if (team?.ambientXy) {
+              restorePayload.xy = team.ambientXy;
+            }
+            restoreOutcomes[id] = { action: 'restore_state', payload: restorePayload };
+            await this.dispatchHueBridge(restorePayload, id);
+          }
+        } else {
+          // No prior state recorded -> Reset to ambient
+          const fallbackPayload = {
+            on: true,
+            xy: team.ambientXy,
+            bri: this.config.general.ambientBrightness || 220,
+            alert: 'none',
+            transitiontime: 15
+          };
+          restoreOutcomes[id] = { action: 'fallback_ambient', payload: fallbackPayload };
+          await this.dispatchHueBridge(fallbackPayload, id);
+        }
+      })
+    );
+
     this.addLog('Lighting', 'CELEBRATION_RESTORE', {
-      team: team.name,
-      restoringAmbient: team.ambientRgb
+      team: team?.name,
+      targets: targetIds,
+      restoreOutcomes
     });
 
-    // Reset alert on Philips Hue
-    this.dispatchHueBridge({
-      on: true,
-      xy: team.ambientXy,
-      bri: this.config.general.ambientBrightness || 220,
-      alert: 'none'
-    });
+    // Clear saved states snapshot
+    this.previousStates = {};
 
-    this.setAmbientLighting(this.currentTeamId);
+    this.notifyStateChange({ mode: 'ambient', isCelebrating: false });
   }
 
   testHardware() {

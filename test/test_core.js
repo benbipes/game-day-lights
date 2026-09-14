@@ -45,21 +45,61 @@ assert.strictEqual(lightService.currentTeamId, 'vikings');
 assert.deepStrictEqual(lightService.currentLightColor, [79, 38, 131]);
 console.log('  ✅ Vikings ambient lighting set to Purple [79, 38, 131]');
 
+// Test 2b: Multi-Room Target Resolution
+console.log('▶ Test 2b: Multi-Room Target ID Resolution');
+lightService.updateConfig({ philipsHue: { targetIds: ['1', '81'] } });
+assert.deepStrictEqual(lightService.getTargetIds(), ['1', '81'], 'targetIds array resolved');
+
+lightService.updateConfig({ philipsHue: { targetIds: [], targetId: '1, 81, 4' } });
+assert.deepStrictEqual(lightService.getTargetIds(), ['1', '81', '4'], 'comma-separated targetId resolved');
+console.log('  ✅ Multi-room target IDs resolved correctly for single, array, and comma-separated');
+
+// Test 2c: Exact Light State Restoration (OFF -> OFF; ON -> Prior color/bri)
+console.log('▶ Test 2c: Exact State Restoration Engine');
+const capturedDispatches = [];
+lightService.dispatchSingleHueTarget = async (cleanIp, username, targetType, targetId, payload) => {
+  capturedDispatches.push({ targetId, payload });
+  return { success: true, targetId };
+};
+
+// Target 3 was OFF before celebration; Target 1 was ON at warm white 180 bri
+lightService.updateConfig({ philipsHue: { targetIds: ['1', '3'], enabled: true, bridgeIp: '192.168.1.1', username: 'testuser' } });
+lightService.previousStates = {
+  '3': { targetId: '3', wasOn: false },
+  '1': { targetId: '1', wasOn: true, bri: 180, ct: 366, colormode: 'ct' }
+};
+
+await lightService.endCelebration();
+
+const target3Dispatch = capturedDispatches.find(d => d.targetId === '3');
+assert.ok(target3Dispatch, 'Target 3 received restore dispatch');
+assert.strictEqual(target3Dispatch.payload.on, false, 'Target 3 that was OFF was restored to OFF');
+
+const target1Dispatch = capturedDispatches.find(d => d.targetId === '1');
+assert.ok(target1Dispatch, 'Target 1 received restore dispatch');
+assert.strictEqual(target1Dispatch.payload.on, true, 'Target 1 that was ON was restored to ON');
+assert.strictEqual(target1Dispatch.payload.bri, 180, 'Target 1 restored prior brightness');
+assert.strictEqual(target1Dispatch.payload.ct, 366, 'Target 1 restored prior color temperature');
+console.log('  ✅ Exact state restoration validated: OFF room restored to OFF, ON room restored to prior bri & ct');
+
 // Test Celebration Trigger
 let stateUpdates = [];
 lightService.onStateChange((state) => {
   stateUpdates.push(state);
 });
 
-lightService.triggerCelebration('vikings', { type: 'TOUCHDOWN' });
+await lightService.triggerCelebration('vikings', { type: 'TOUCHDOWN' });
 assert.strictEqual(lightService.currentMode, 'celebration');
 assert.strictEqual(lightService.activeCelebrationTimer !== null, true);
+assert.strictEqual(lightService.activeHardwareStrobeInterval !== null, true);
 
 // End celebration
-lightService.endCelebration();
+await lightService.endCelebration();
 assert.strictEqual(lightService.currentMode, 'ambient');
+assert.strictEqual(lightService.activeHardwareStrobeInterval, null, 'Hardware strobe cleared on celebration end');
 assert.deepStrictEqual(lightService.currentLightColor, [79, 38, 131]);
 console.log('  ✅ Celebration triggered and smoothly restored to ambient');
+
 
 // Test 3: EspnService Webhook Ingestion & Score Delta Detection
 console.log('▶ Test 3: EspnService Live Score & Webhook Ingestion');

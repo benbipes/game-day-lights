@@ -473,6 +473,22 @@
                 <div id="hue-pair-feedback" class="field-hint" style="color: var(--accent-gold); margin-top: 0.4rem; display: none;"></div>
               </div>
 
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                  <label style="margin-bottom: 0; font-weight: 600;">Rooms & Entertainment Zones to Flash</label>
+                  <button id="btn-fetch-rooms" class="btn btn-xs btn-outline" style="padding: 0.2rem 0.6rem;">🔄 Load / Refresh Rooms</button>
+                </div>
+                <p class="field-hint" style="margin-top: 0; margin-bottom: 0.6rem;">
+                  Select multiple rooms to celebrate at the same time (e.g. Living Room + Pool Patio):
+                </p>
+                <!-- Multi-Room Selection Cards Grid -->
+                <div id="hue-rooms-grid" class="hue-rooms-grid">
+                  <div class="rooms-placeholder" style="grid-column: 1 / -1; padding: 0.8rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px;">
+                    Click <strong>🔄 Load / Refresh Rooms</strong> above to discover all your Philips Hue rooms.
+                  </div>
+                </div>
+              </div>
+
               <div class="form-row">
                 <div class="form-group col-half">
                   <label for="hue-target-type">Target Type</label>
@@ -482,20 +498,16 @@
                   </select>
                 </div>
                 <div class="form-group col-half">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                    <label for="hue-target-id" style="margin-bottom: 0;">Target ID / Room</label>
-                    <button id="btn-fetch-rooms" class="btn btn-xs btn-ghost" style="padding: 0 0.2rem;">🔄 Refresh</button>
-                  </div>
-                  <input type="text" id="hue-target-id" class="form-control" value="1" placeholder="1">
-                  <select id="hue-room-select" class="form-control" style="display: none; margin-top: 0.4rem;"></select>
-                  <small class="field-hint">Room 1 is usually your primary room or entertainment zone. Click 🔄 Refresh to load names.</small>
+                  <label for="hue-target-id">Target Room ID(s)</label>
+                  <input type="text" id="hue-target-id" class="form-control" value="1" placeholder="e.g. 1, 81">
+                  <small class="field-hint">Comma-separated room IDs. Selected rooms above update this automatically.</small>
                 </div>
               </div>
 
               <div class="form-group">
                 <div class="checkbox-toggle">
-                  <input type="checkbox" id="hue-alert-strobe" checked>
-                  <label for="hue-alert-strobe">Use Hue Hardware Alert Strobe (<code>lselect</code> 15-second breathing flash)</label>
+                  <input type="checkbox" id="hue-alert-strobe">
+                  <label for="hue-alert-strobe">Enable Active Multi-Color Hardware Strobe (cycles all team colors & auto-restores exact state)</label>
                 </div>
               </div>
 
