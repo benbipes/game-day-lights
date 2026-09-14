@@ -276,18 +276,157 @@ class SoundSynthesizer {
   }
 }
 
+// Default fallback teams data for standalone static hosting (GitHub Pages)
+const FALLBACK_TEAMS = {
+  canes: {
+    id: 'canes',
+    name: 'Carolina Hurricanes',
+    short: 'Canes',
+    league: 'NHL',
+    sport: 'Hockey',
+    primaryColor: '#C8102E',
+    secondaryColor: '#000000',
+    accentColor: '#FFFFFF',
+    ambientRgb: [200, 16, 46],
+    celebration: {
+      colors: [[255, 0, 0], [255, 255, 255], [200, 16, 46], [150, 0, 0]],
+      durationMs: 12000,
+      flashIntervalMs: 250,
+      audioKey: 'nhl_goal_horn',
+      celebrationTitle: 'CANES GOAL!',
+      celebrationTagline: 'THE SIREN SOUNDS IN RALEIGH! 🚨'
+    },
+    defaultMatch: {
+      opponent: 'New York Rangers',
+      opponentShort: 'NYR',
+      scoreTeam: 3,
+      scoreOpponent: 2,
+      period: '3rd Period',
+      clock: '04:12',
+      lastEvent: 'GOAL: Sebastian Aho (Slap Shot, assists: Teravainen, Slavin)'
+    }
+  },
+  wolfpack: {
+    id: 'wolfpack',
+    name: 'NC State Wolfpack',
+    short: 'Wolfpack',
+    league: 'NCAA',
+    sport: 'College Football',
+    primaryColor: '#CC0000',
+    secondaryColor: '#FFFFFF',
+    accentColor: '#000000',
+    ambientRgb: [204, 0, 0],
+    celebration: {
+      colors: [[204, 0, 0], [255, 255, 255], [255, 30, 30], [255, 255, 255]],
+      durationMs: 12000,
+      flashIntervalMs: 220,
+      audioKey: 'wolfpack_touchdown',
+      celebrationTitle: 'TOUCHDOWN WOLFPACK!',
+      celebrationTagline: 'CARTER-FINLEY STADIUM ERUPTS! 🐺'
+    },
+    defaultMatch: {
+      opponent: 'North Carolina Tar Heels',
+      opponentShort: 'UNC',
+      scoreTeam: 28,
+      scoreOpponent: 20,
+      period: '4th Quarter',
+      clock: '02:45',
+      lastEvent: 'TOUCHDOWN: KC Concepcion 42 yd pass from Grayson McCall'
+    }
+  },
+  vikings: {
+    id: 'vikings',
+    name: 'Minnesota Vikings',
+    short: 'Vikings',
+    league: 'NFL',
+    sport: 'Football',
+    primaryColor: '#4F2683',
+    secondaryColor: '#FFC62F',
+    accentColor: '#FFFFFF',
+    ambientRgb: [79, 38, 131],
+    celebration: {
+      colors: [[79, 38, 131], [255, 198, 47], [125, 60, 205], [255, 225, 90]],
+      durationMs: 14000,
+      flashIntervalMs: 280,
+      audioKey: 'gjallarhorn',
+      celebrationTitle: 'VIKINGS TOUCHDOWN!',
+      celebrationTagline: 'SKOL! THE GJALLARHORN SOUNDS! ⚔️'
+    },
+    defaultMatch: {
+      opponent: 'Green Bay Packers',
+      opponentShort: 'GB',
+      scoreTeam: 24,
+      scoreOpponent: 17,
+      period: '4th Quarter',
+      clock: '03:18',
+      lastEvent: 'TOUCHDOWN: Justin Jefferson 24 yd catch from Sam Darnold'
+    }
+  },
+  liverpool: {
+    id: 'liverpool',
+    name: 'Liverpool FC',
+    short: 'Liverpool',
+    league: 'Premier League',
+    sport: 'Soccer',
+    primaryColor: '#C8102E',
+    secondaryColor: '#00B2A9',
+    accentColor: '#F6EB61',
+    ambientRgb: [200, 16, 46],
+    celebration: {
+      colors: [[200, 16, 46], [255, 255, 255], [255, 30, 45], [0, 178, 169]],
+      durationMs: 12000,
+      flashIntervalMs: 250,
+      audioKey: 'liverpool_goal',
+      celebrationTitle: 'GOAL FOR LIVERPOOL!',
+      celebrationTagline: 'YOU\'LL NEVER WALK ALONE! ⚽'
+    },
+    defaultMatch: {
+      opponent: 'Manchester City',
+      opponentShort: 'MCI',
+      scoreTeam: 2,
+      scoreOpponent: 1,
+      period: '2nd Half',
+      clock: '82:15',
+      lastEvent: 'GOAL: Mohamed Salah (Right footed shot into bottom corner)'
+    }
+  }
+};
+
 // Application State
 const state = {
-  teams: {},
+  teams: FALLBACK_TEAMS,
   activeTeam: 'canes',
   currentRgb: [200, 16, 46],
   mode: 'ambient',
   isCelebrating: false,
+  isStandalone: false,
   sound: new SoundSynthesizer(),
-  match: null,
-  config: null,
+  match: JSON.parse(JSON.stringify(FALLBACK_TEAMS.canes.defaultMatch)),
+  config: {
+    homeAssistant: {
+      enabled: true,
+      mode: 'webhook',
+      host: 'http://homeassistant.local:8123',
+      webhookId: 'game_day_score_celebration',
+      entityId: 'light.living_room_lights'
+    },
+    philipsHue: {
+      enabled: true,
+      bridgeIp: '192.168.1.50',
+      username: 'hue_api_key',
+      targetType: 'group',
+      targetId: '1',
+      useAlertStrobe: true
+    },
+    general: {
+      activeTeam: 'canes',
+      ambientBrightness: 220,
+      celebrationDurationSeconds: 12
+    }
+  },
   logs: []
 };
+
 
 // DOM References
 const elements = {
@@ -404,7 +543,9 @@ function initSse() {
   });
 
   evtSource.onerror = () => {
-    elements.statusLabel.textContent = 'Reconnecting to Server...';
+    state.isStandalone = true;
+    const team = state.teams[state.activeTeam];
+    elements.statusLabel.textContent = `Ambient Synced: ${team?.name || 'Canes'} (Standalone Mode)`;
   };
 }
 
@@ -506,8 +647,64 @@ function highlightActiveTeamCard(teamId) {
   });
 }
 
+// Local celebration runner for standalone / GitHub Pages hosting
+let localFlashInterval = null;
+
+function runLocalCelebration(teamId, eventName = 'GOAL') {
+  const team = state.teams[teamId];
+  if (!team) return;
+  state.isCelebrating = true;
+  updateThemeColors();
+
+  triggerCelebrationDisplay({
+    celebrationTitle: team.celebration.celebrationTitle,
+    celebrationTagline: team.celebration.celebrationTagline,
+    audioKey: team.celebration.audioKey,
+    scoreEvent: { type: eventName }
+  });
+
+  if (localFlashInterval) clearInterval(localFlashInterval);
+  let step = 0;
+  localFlashInterval = setInterval(() => {
+    step++;
+    const colors = team.celebration.colors;
+    state.currentRgb = colors[step % colors.length];
+    updateThemeColors();
+  }, team.celebration.flashIntervalMs || 250);
+
+  setTimeout(() => {
+    runLocalAmbient(teamId);
+  }, team.celebration.durationMs || 12000);
+}
+
+function runLocalAmbient(teamId) {
+  if (localFlashInterval) {
+    clearInterval(localFlashInterval);
+    localFlashInterval = null;
+  }
+  state.isCelebrating = false;
+  const team = state.teams[teamId];
+  if (team) {
+    state.currentRgb = team.ambientRgb;
+  }
+  hideCelebrationDisplay();
+  updateThemeColors();
+}
+
 // Select Team Action
 async function selectTeam(teamId) {
+  state.activeTeam = teamId;
+  const team = state.teams[teamId];
+  if (team) {
+    state.currentRgb = team.ambientRgb;
+    if (state.isStandalone || !state.match || state.match.teamId !== teamId) {
+      state.match = JSON.parse(JSON.stringify(team.defaultMatch));
+    }
+  }
+  updateThemeColors();
+  renderScoreboard();
+  highlightActiveTeamCard(teamId);
+
   try {
     const res = await fetch('/api/select-team', {
       method: 'POST',
@@ -515,152 +712,73 @@ async function selectTeam(teamId) {
       body: JSON.stringify({ teamId })
     });
     const data = await res.json();
-    if (data.success) {
-      state.activeTeam = teamId;
+    if (data.success && data.match) {
       state.match = data.match;
-      updateThemeColors();
       renderScoreboard();
-      highlightActiveTeamCard(teamId);
     }
   } catch (err) {
-    console.error('Failed to select team:', err);
+    state.isStandalone = true;
   }
 }
 
-// Render Logs
-function renderLogs() {
-  elements.logCount.textContent = state.logs.length;
-  elements.logsContainer.innerHTML = '';
-
-  if (state.logs.length === 0) {
-    elements.logsContainer.innerHTML = '<div style="color: #64748b; padding: 1rem; text-align: center;">No activity recorded yet. Trigger a celebration or webhook to see live telemetry.</div>';
-    return;
-  }
-
-  for (const log of state.logs.slice(0, 30)) {
-    const el = document.createElement('div');
-    el.className = `log-entry ${log.success ? '' : 'error'}`;
-    
-    const time = new Date(log.timestamp).toLocaleTimeString();
-    const detailsStr = typeof log.details === 'object' ? JSON.stringify(log.details) : log.details;
-
-    el.innerHTML = `
-      <span class="log-time">${time}</span>
-      <span class="log-badge">${log.source}</span>
-      <span class="log-badge">${log.type}</span>
-      <span class="log-details">${detailsStr}</span>
-    `;
-    elements.logsContainer.appendChild(el);
-  }
-}
-
-// Config Forms & Home Assistant YAML
-async function fetchHaYaml() {
+// Quick Celebration & Ambient Buttons
+elements.btnQuickCelebrate.addEventListener('click', async () => {
   try {
-    const res = await fetch('/api/ha-yaml');
-    const text = await res.text();
-    elements.haYamlBlock.innerHTML = `<code>${escapeHtml(text)}</code>`;
-  } catch (err) {
-    elements.haYamlBlock.textContent = '# Failed to load Home Assistant YAML';
-  }
-}
-
-function renderConfigForms() {
-  if (!state.config) return;
-
-  const ha = state.config.homeAssistant || {};
-  document.getElementById('ha-enabled').checked = !!ha.enabled;
-  document.getElementById('ha-mode').value = ha.mode || 'webhook';
-  document.getElementById('ha-host').value = ha.host || 'http://homeassistant.local:8123';
-  document.getElementById('ha-webhook-id').value = ha.webhookId || 'game_day_score_celebration';
-  document.getElementById('ha-entity-id').value = ha.entityId || 'light.living_room_lights';
-  toggleHaModeFields(ha.mode);
-
-  const hue = state.config.philipsHue || {};
-  document.getElementById('hue-enabled').checked = !!hue.enabled;
-  document.getElementById('hue-ip').value = hue.bridgeIp || '192.168.1.50';
-  document.getElementById('hue-user').value = hue.username || '';
-  document.getElementById('hue-target-type').value = hue.targetType || 'group';
-  document.getElementById('hue-target-id').value = hue.targetId || '1';
-  document.getElementById('hue-alert-strobe').checked = !!hue.useAlertStrobe;
-
-  // Display webhook URLs
-  const origin = window.location.origin;
-  elements.webhookUrlDisplay.textContent = `${origin}/api/webhooks/score`;
-  elements.webhookEspnUrlDisplay.textContent = `${origin}/api/webhooks/espn`;
-}
-
-function toggleHaModeFields(mode) {
-  if (mode === 'service') {
-    elements.groupHaToken.style.display = 'block';
-  } else {
-    elements.groupHaToken.style.display = 'none';
-  }
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Event Listeners Initialization
-function setupEventListeners() {
-  // Team cards click
-  document.querySelectorAll('.team-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const teamId = card.dataset.team;
-      selectTeam(teamId);
-    });
-  });
-
-  // Sound Toggle
-  elements.btnSoundToggle.addEventListener('click', () => {
-    state.sound.enabled = !state.sound.enabled;
-    if (state.sound.enabled) {
-      state.sound.init();
-      elements.soundIcon.textContent = '🔊';
-      elements.soundLabel.textContent = 'Sound ON';
-    } else {
-      state.sound.stopAll();
-      elements.soundIcon.textContent = '🔇';
-      elements.soundLabel.textContent = 'Sound MUTED';
-    }
-  });
-
-  // Quick Celebration & Ambient Buttons
-  elements.btnQuickCelebrate.addEventListener('click', async () => {
-    await fetch('/api/test-celebration', {
+    const res = await fetch('/api/test-celebration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId: state.activeTeam })
     });
-  });
+    if (!res.ok) throw new Error('API unavailable');
+  } catch (err) {
+    runLocalCelebration(state.activeTeam, 'TEST CELEBRATION');
+  }
+});
 
-  elements.btnQuickAmbient.addEventListener('click', async () => {
-    hideCelebrationDisplay();
-    state.sound.stopAll();
+elements.btnQuickAmbient.addEventListener('click', async () => {
+  hideCelebrationDisplay();
+  state.sound.stopAll();
+  try {
     await fetch('/api/test-ambient', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId: state.activeTeam })
     });
-  });
+  } catch (err) {
+    runLocalAmbient(state.activeTeam);
+  }
+});
 
-  // Simulator Controls
-  document.getElementById('btn-sim-score').addEventListener('click', async () => {
-    const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack';
-    await fetch('/api/simulate-score', {
+// Simulator Controls
+document.getElementById('btn-sim-score').addEventListener('click', async () => {
+  const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack';
+  const pts = isFootball ? 6 : 1;
+  const evtName = isFootball ? 'TOUCHDOWN' : 'GOAL';
+
+  try {
+    const res = await fetch('/api/simulate-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         teamId: state.activeTeam,
-        event: isFootball ? 'TOUCHDOWN' : 'GOAL',
-        points: isFootball ? 6 : 1
+        event: evtName,
+        points: pts
       })
     });
-  });
+    if (!res.ok) throw new Error('API unavailable');
+  } catch (err) {
+    if (state.match) {
+      state.match.scoreTeam += pts;
+      state.match.lastEvent = `${evtName} scored (+${pts} pts)`;
+      renderScoreboard();
+    }
+    runLocalCelebration(state.activeTeam, evtName);
+  }
+});
 
-  document.getElementById('btn-sim-touchdown').addEventListener('click', async () => {
-    await fetch('/api/simulate-score', {
+document.getElementById('btn-sim-touchdown').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/simulate-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -669,23 +787,52 @@ function setupEventListeners() {
         points: 6
       })
     });
-  });
+    if (!res.ok) throw new Error('API unavailable');
+  } catch (err) {
+    if (state.match) {
+      state.match.scoreTeam += 6;
+      state.match.lastEvent = `TOUCHDOWN scored (+6 pts)`;
+      renderScoreboard();
+    }
+    runLocalCelebration(state.activeTeam, 'TOUCHDOWN');
+  }
+});
 
-  document.getElementById('btn-sim-opp').addEventListener('click', async () => {
-    await fetch('/api/simulate-opponent-score', {
+document.getElementById('btn-sim-opp').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/simulate-opponent-score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId: state.activeTeam })
     });
-  });
+    if (!res.ok) throw new Error('API unavailable');
+  } catch (err) {
+    if (state.match) {
+      state.match.scoreOpponent += 1;
+      state.match.lastEvent = `OPPONENT SCORE (+1 pt)`;
+      renderScoreboard();
+    }
+  }
+});
 
-  document.getElementById('btn-sim-reset').addEventListener('click', async () => {
-    await fetch('/api/reset-match', {
+document.getElementById('btn-sim-reset').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/reset-match', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ teamId: state.activeTeam })
     });
-  });
+    if (!res.ok) throw new Error('API unavailable');
+  } catch (err) {
+    const team = state.teams[state.activeTeam];
+    if (team) {
+      state.match = JSON.parse(JSON.stringify(team.defaultMatch));
+      renderScoreboard();
+      runLocalAmbient(state.activeTeam);
+    }
+  }
+});
+
 
   // Tabs
   elements.tabButtons.forEach(btn => {
@@ -823,9 +970,15 @@ async function loadTeams() {
 
 // Initialize Application
 async function initApp() {
+  updateThemeColors();
+  renderScoreboard();
+  highlightActiveTeamCard(state.activeTeam);
+  renderConfigForms();
+  fetchHaYaml();
   await loadTeams();
   setupEventListeners();
   initSse();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
+
