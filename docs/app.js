@@ -721,8 +721,35 @@ async function selectTeam(teamId) {
   }
 }
 
-// Quick Celebration & Ambient Buttons
-elements.btnQuickCelebrate.addEventListener('click', async () => {
+// Event Listeners Initialization
+function setupEventListeners() {
+  // Team cards click
+  document.querySelectorAll('.team-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const teamId = card.dataset.team;
+      selectTeam(teamId);
+    });
+  });
+
+  // Sound Toggle
+  if (elements.btnSoundToggle) {
+    elements.btnSoundToggle.addEventListener('click', () => {
+      state.sound.enabled = !state.sound.enabled;
+      if (state.sound.enabled) {
+        state.sound.init();
+        elements.soundIcon.textContent = '🔊';
+        elements.soundLabel.textContent = 'Sound ON';
+      } else {
+        state.sound.stopAll();
+        elements.soundIcon.textContent = '🔇';
+        elements.soundLabel.textContent = 'Sound MUTED';
+      }
+    });
+  }
+
+  // Quick Celebration & Ambient Buttons
+  elements.btnQuickCelebrate.addEventListener('click', async () => {
+
   try {
     const res = await fetch('/api/test-celebration', {
       method: 'POST',
