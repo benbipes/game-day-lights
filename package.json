@@ -1,0 +1,25 @@
+{
+  "name": "game-day-lights",
+  "version": "1.0.0",
+  "description": "Game Day Philips Hue & Home Assistant Smart Lighting Sync with Live Score Celebrations",
+  "main": "server/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js"
+  },
+  "keywords": [
+    "philips-hue",
+    "home-assistant",
+    "webhooks",
+    "espn",
+    "game-day",
+    "smart-lighting",
+    "canes",
+    "wolfpack",
+    "vikings",
+    "liverpool"
+  ],
+  "author": "Game Day Lights",
+  "license": "MIT"
+}

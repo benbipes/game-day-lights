@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Day Lights — Philips Hue & Home Assistant Smart Sync</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,400;0,600;0,700;1,700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="bg-obsidian text-light antialiased">
+  <!-- Top Celebration Alert Overlay -->
+  <div id="celebration-overlay" class="celebration-overlay hidden">
+    <div class="celebration-glow"></div>
+    <div class="celebration-content">
+      <div class="celebration-badge" id="celebration-badge">🚨 GOAL!</div>
+      <h1 class="celebration-title" id="celebration-title">CANES GOAL!</h1>
+      <p class="celebration-tagline" id="celebration-tagline">THE SIREN SOUNDS IN RALEIGH!</p>
+      <div class="celebration-flasher-bar">
+        <div class="flasher-lamp lamp-1"></div>
+        <div class="flasher-lamp lamp-2"></div>
+        <div class="flasher-lamp lamp-3"></div>
+        <div class="flasher-lamp lamp-4"></div>
+      </div>
+      <div class="celebration-progress">
+        <div id="celebration-progress-bar" class="celebration-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Container -->
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon-wrapper">
+          <span class="brand-bulb-indicator" id="header-bulb-indicator"></span>
+          <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 18h6m-4 3h2m-5-6a7 7 0 1 1 8 0c0 2-1 3-1 4H10c0-1-1-2-1-4z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">GAME DAY <span class="accent-text">LIGHTS</span></div>
+          <div class="brand-subtitle">Hue & Home Assistant Sync</div>
+        </div>
+      </div>
+
+      <!-- Quick Status & Controls -->
+      <div class="header-controls">
+        <div class="status-indicator" id="system-status-indicator">
+          <span class="status-dot pulsing"></span>
+          <span class="status-label" id="status-label">Ambient Lighting Synced</span>
+        </div>
+
+        <button id="btn-sound-toggle" class="btn btn-secondary btn-icon" title="Toggle Celebration Audio">
+          <span id="sound-icon">🔊</span>
+          <span id="sound-label" class="btn-text">Sound ON</span>
+        </button>
+
+        <button id="btn-quick-celebrate" class="btn btn-primary glow-button">
+          <span>⚡ Test Goal Celebration</span>
+        </button>
+
+        <button id="btn-quick-ambient" class="btn btn-secondary">
+          <span>🔆 Reset to Ambient</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Section 1: Team / Match Selector -->
+      <section class="section-team-selector">
+        <div class="section-heading">
+          <div class="section-title">
+            <span class="heading-badge">STEP 1</span>
+            <h2>Select Today's Match</h2>
+          </div>
+          <p class="section-desc">Choose a team to immediately sync your Philips Hue & Home Assistant ambient lighting to their colors.</p>
+        </div>
+
+        <div class="teams-grid" id="teams-grid">
+          <!-- Carolina Hurricanes Card -->
+          <div class="team-card active" data-team="canes" id="card-canes">
+            <div class="team-card-header">
+              <span class="league-pill">NHL • HOCKEY</span>
+              <span class="active-badge">ACTIVE MATCH</span>
+            </div>
+            <div class="team-logo-area">
+              <div class="team-icon-circle canes-bg">
+                <span class="team-symbol">🌀</span>
+              </div>
+              <div class="team-meta">
+                <h3 class="team-name">Carolina Hurricanes</h3>
+                <div class="match-opponent-text">vs New York Rangers</div>
+              </div>
+            </div>
+            <div class="team-color-strip">
+              <span class="color-dot" style="background: #C8102E;" title="Storm Red"></span>
+              <span class="color-dot" style="background: #000000; border: 1px solid #444;" title="Black"></span>
+              <span class="color-dot" style="background: #FFFFFF;" title="White"></span>
+            </div>
+            <div class="team-celebration-preview">
+              <span class="preview-tag">CELEBRATION:</span>
+              <span class="preview-effect">🚨 Red Siren Flash + Horn</span>
+            </div>
+          </div>
+
+          <!-- NC State Wolfpack Card -->
+          <div class="team-card" data-team="wolfpack" id="card-wolfpack">
+            <div class="team-card-header">
+              <span class="league-pill">NCAA • FOOTBALL</span>
+              <span class="active-badge">ACTIVE MATCH</span>
+            </div>
+            <div class="team-logo-area">
+              <div class="team-icon-circle wolfpack-bg">
+                <span class="team-symbol">🐺</span>
+              </div>
+              <div class="team-meta">
+                <h3 class="team-name">NC State Wolfpack</h3>
+                <div class="match-opponent-text">vs UNC Tar Heels</div>
+              </div>
+            </div>
+            <div class="team-color-strip">
+              <span class="color-dot" style="background: #CC0000;" title="Wolfpack Red"></span>
+              <span class="color-dot" style="background: #FFFFFF;" title="White"></span>
+              <span class="color-dot" style="background: #000000; border: 1px solid #444;" title="Black"></span>
+            </div>
+            <div class="team-celebration-preview">
+              <span class="preview-tag">CELEBRATION:</span>
+              <span class="preview-effect">🐺 Red & White Touchdown Strobe</span>
+            </div>
+          </div>
+
+          <!-- Minnesota Vikings Card -->
+          <div class="team-card" data-team="vikings" id="card-vikings">
+            <div class="team-card-header">
+              <span class="league-pill">NFL • FOOTBALL</span>
+              <span class="active-badge">ACTIVE MATCH</span>
+            </div>
+            <div class="team-logo-area">
+              <div class="team-icon-circle vikings-bg">
+                <span class="team-symbol">⚔️</span>
+              </div>
+              <div class="team-meta">
+                <h3 class="team-name">Minnesota Vikings</h3>
+                <div class="match-opponent-text">vs Green Bay Packers</div>
+              </div>
+            </div>
+            <div class="team-color-strip">
+              <span class="color-dot" style="background: #4F2683;" title="Vikings Purple"></span>
+              <span class="color-dot" style="background: #FFC62F;" title="Vikings Gold"></span>
+              <span class="color-dot" style="background: #FFFFFF;" title="White"></span>
+            </div>
+            <div class="team-celebration-preview">
+              <span class="preview-tag">CELEBRATION:</span>
+              <span class="preview-effect">⚔️ Purple & Gold Flashing Strobe</span>
+            </div>
+          </div>
+
+          <!-- Liverpool FC Card -->
+          <div class="team-card" data-team="liverpool" id="card-liverpool">
+            <div class="team-card-header">
+              <span class="league-pill">EPL • SOCCER</span>
+              <span class="active-badge">ACTIVE MATCH</span>
+            </div>
+            <div class="team-logo-area">
+              <div class="team-icon-circle liverpool-bg">
+                <span class="team-symbol">⚽</span>
+              </div>
+              <div class="team-meta">
+                <h3 class="team-name">Liverpool FC</h3>
+                <div class="match-opponent-text">vs Manchester City</div>
+              </div>
+            </div>
+            <div class="team-color-strip">
+              <span class="color-dot" style="background: #C8102E;" title="Anfield Red"></span>
+              <span class="color-dot" style="background: #00B2A9;" title="Teal Accent"></span>
+              <span class="color-dot" style="background: #F6EB61;" title="Yellow"></span>
+            </div>
+            <div class="team-celebration-preview">
+              <span class="preview-tag">CELEBRATION:</span>
+              <span class="preview-effect">⚽ Anfield Red Flare + Kop Roar</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Scoreboard & Smart Room Visualizer Grid -->
+      <section class="section-center-stage">
+        <!-- Live Scoreboard -->
+        <div class="scoreboard-card">
+          <div class="scoreboard-header">
+            <div class="match-badge" id="match-league-badge">NHL • GAME DAY LIVE</div>
+            <div class="game-period-pill" id="match-period-clock">3rd Period • 04:12</div>
+          </div>
+
+          <div class="scoreboard-main">
+            <!-- Home / Selected Team -->
+            <div class="scoreboard-side home-side">
+              <div class="score-team-logo-wrap" id="score-team-badge">🌀</div>
+              <div class="score-team-details">
+                <div class="score-team-name" id="score-team-name">Carolina Hurricanes</div>
+                <div class="score-team-tag">HOME</div>
+              </div>
+              <div class="score-digit" id="score-team-pts">3</div>
+            </div>
+
+            <div class="score-vs-divider">
+              <span>VS</span>
+            </div>
+
+            <!-- Away / Opponent Team -->
+            <div class="scoreboard-side away-side">
+              <div class="score-digit" id="score-opponent-pts">2</div>
+              <div class="score-team-details text-right">
+                <div class="score-team-name" id="score-opponent-name">New York Rangers</div>
+                <div class="score-team-tag">AWAY</div>
+              </div>
+              <div class="score-team-logo-wrap opponent-badge" id="score-opponent-badge">🛡️</div>
+            </div>
+          </div>
+
+          <!-- Last Event Ticker -->
+          <div class="scoreboard-ticker">
+            <span class="ticker-label">LAST PLAY:</span>
+            <span class="ticker-text" id="match-last-event">GOAL: Sebastian Aho (Slap Shot, assists: Teravainen, Slavin)</span>
+          </div>
+
+          <!-- Simulator Quick Triggers -->
+          <div class="scoreboard-actions">
+            <div class="actions-label">🎮 SIMULATOR CONTROLS:</div>
+            <div class="actions-buttons">
+              <button id="btn-sim-score" class="btn btn-sm btn-action-score">
+                <span id="btn-sim-score-text">+ Simulate Goal (+1)</span>
+              </button>
+              <button id="btn-sim-touchdown" class="btn btn-sm btn-action-td">
+                <span>+ Touchdown (+6)</span>
+              </button>
+              <button id="btn-sim-opp" class="btn btn-sm btn-secondary">
+                <span>+ Opponent (+1)</span>
+              </button>
+              <button id="btn-sim-reset" class="btn btn-sm btn-ghost">
+                <span>🔄 Reset Score</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Smart Room Lighting Visualizer -->
+        <div class="visualizer-card">
+          <div class="visualizer-header">
+            <div class="visualizer-title">
+              <span class="card-icon">💡</span>
+              <h3>Living Room Hue Simulation</h3>
+            </div>
+            <div class="visualizer-status" id="visualizer-color-label">
+              Color: <span class="color-code" id="color-rgb-display">RGB(200, 16, 46)</span>
+            </div>
+          </div>
+
+          <!-- Virtual Room Canvas & SVG -->
+          <div class="virtual-room-container" id="virtual-room">
+            <!-- Dynamic Room Ambient Glow Layer -->
+            <div class="room-ambient-wash" id="room-ambient-wash"></div>
+
+            <!-- Living Room Content -->
+            <div class="virtual-room-scene">
+              <!-- Ceiling Pendant Lights -->
+              <div class="ceiling-fixtures">
+                <div class="pendant-cord cord-left"></div>
+                <div class="smart-bulb fixture-pendant left-bulb" id="bulb-pendant-1">
+                  <div class="bulb-halo"></div>
+                  <div class="bulb-core"></div>
+                  <span class="fixture-label">Hue Bulb #1</span>
+                </div>
+
+                <div class="pendant-cord cord-right"></div>
+                <div class="smart-bulb fixture-pendant right-bulb" id="bulb-pendant-2">
+                  <div class="bulb-halo"></div>
+                  <div class="bulb-core"></div>
+                  <span class="fixture-label">Hue Bulb #2</span>
+                </div>
+              </div>
+
+              <!-- Center TV & Hue Lightstrip -->
+              <div class="tv-entertainment-center">
+                <div class="hue-lightstrip-glow" id="tv-lightstrip-glow"></div>
+                <div class="tv-frame">
+                  <div class="tv-screen" id="tv-screen">
+                    <div class="tv-screen-content">
+                      <div class="screen-logo" id="screen-team-icon">🌀</div>
+                      <div class="screen-matchup" id="screen-matchup-text">CANES VS RANGERS</div>
+                      <div class="screen-clock" id="screen-clock-text">3rd 04:12</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="tv-stand"></div>
+                <span class="fixture-label">Hue Lightstrip Play Gradient</span>
+              </div>
+
+              <!-- Left Floor Wash Lamp -->
+              <div class="smart-bulb fixture-floor left-floor-lamp" id="bulb-floor-1">
+                <div class="bulb-halo"></div>
+                <div class="bulb-core"></div>
+                <div class="lamp-pole"></div>
+                <span class="fixture-label">Floor Wash</span>
+              </div>
+
+              <!-- Right Accent Lamp -->
+              <div class="smart-bulb fixture-floor right-floor-lamp" id="bulb-floor-2">
+                <div class="bulb-halo"></div>
+                <div class="bulb-core"></div>
+                <div class="lamp-pole"></div>
+                <span class="fixture-label">Corner Uplight</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="visualizer-footer">
+            <span class="visualizer-note">⚡ Real-time simulation of connected Philips Hue and Home Assistant entities.</span>
+            <div class="strobe-indicator" id="strobe-indicator">
+              <span class="strobe-dot"></span>
+              <span id="strobe-mode-text">AMBIENT SYNCED</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Webhook, Home Assistant & Integration Setup Studio -->
+      <section class="section-integration-hub">
+        <div class="integration-tabs-header">
+          <button class="tab-btn active" data-tab="tab-home-assistant">
+            <span class="tab-icon">🏠</span> Home Assistant Setup
+          </button>
+          <button class="tab-btn" data-tab="tab-philips-hue">
+            <span class="tab-icon">💡</span> Philips Hue Bridge
+          </button>
+          <button class="tab-btn" data-tab="tab-webhook-studio">
+            <span class="tab-icon">📡</span> Webhook Ingestion API
+          </button>
+          <button class="tab-btn" data-tab="tab-live-logs">
+            <span class="tab-icon">📋</span> Activity & Automation Logs (<span id="log-count">0</span>)
+          </button>
+        </div>
+
+        <!-- Tab 1: Home Assistant -->
+        <div class="tab-panel active" id="tab-home-assistant">
+          <div class="integration-grid">
+            <div class="config-form-col">
+              <h3>Home Assistant Configuration</h3>
+              <p class="panel-desc">Configure incoming webhook triggers or direct REST service commands.</p>
+
+              <div class="form-group">
+                <label for="ha-enabled">Integration Status</label>
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="ha-enabled" checked>
+                  <label for="ha-enabled">Enable Home Assistant Integration</label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="ha-mode">Integration Mode</label>
+                <select id="ha-mode" class="form-control">
+                  <option value="webhook">Webhook Trigger (Recommended)</option>
+                  <option value="service">REST Service Call (/api/services/light/turn_on)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="ha-host">Home Assistant Base URL</label>
+                <input type="text" id="ha-host" class="form-control" value="http://homeassistant.local:8123" placeholder="http://192.168.1.100:8123">
+                <small class="field-hint">Your local or Nabu Casa Home Assistant URL.</small>
+              </div>
+
+              <div class="form-group" id="group-ha-webhook">
+                <label for="ha-webhook-id">Webhook ID</label>
+                <input type="text" id="ha-webhook-id" class="form-control" value="game_day_score_celebration">
+                <small class="field-hint">Used in Home Assistant's webhook trigger.</small>
+              </div>
+
+              <div class="form-group" id="group-ha-entity">
+                <label for="ha-entity-id">Target Light Entity ID</label>
+                <input type="text" id="ha-entity-id" class="form-control" value="light.living_room_lights" placeholder="light.living_room_lights">
+              </div>
+
+              <div class="form-group" id="group-ha-token" style="display: none;">
+                <label for="ha-token">Long-Lived Access Token</label>
+                <input type="password" id="ha-token" class="form-control" placeholder="Bearer eyJhbGciOi...">
+                <small class="field-hint">Generated in HA Profile &gt; Long-Lived Access Tokens.</small>
+              </div>
+
+              <div class="form-actions">
+                <button id="btn-save-ha" class="btn btn-primary">Save Settings</button>
+                <button id="btn-test-ha" class="btn btn-secondary">Test HA Trigger</button>
+              </div>
+            </div>
+
+            <!-- Copyable Automations.yaml -->
+            <div class="yaml-preview-col">
+              <div class="yaml-header">
+                <h4>Home Assistant automations.yaml Snippet</h4>
+                <button id="btn-copy-yaml" class="btn btn-xs btn-outline">📋 Copy YAML</button>
+              </div>
+              <p class="yaml-desc">Copy and paste this into your Home Assistant <code>automations.yaml</code> file or Automation UI editor:</p>
+              <pre class="code-block" id="ha-yaml-block"><code>Loading YAML snippet...</code></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Philips Hue Bridge Direct -->
+        <div class="tab-panel" id="tab-philips-hue">
+          <div class="integration-grid">
+            <div class="config-form-col">
+              <h3>Philips Hue Bridge Direct Connection</h3>
+              <p class="panel-desc">Direct local REST communication with your Philips Hue Bridge without requiring Home Assistant.</p>
+
+              <div class="form-group">
+                <label for="hue-enabled">Integration Status</label>
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="hue-enabled" checked>
+                  <label for="hue-enabled">Enable Direct Philips Hue Bridge</label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="hue-ip">Hue Bridge IP Address</label>
+                <input type="text" id="hue-ip" class="form-control" value="192.168.1.50" placeholder="192.168.1.xxx">
+                <small class="field-hint">Find your IP in the Hue app: Settings &gt; Bridge settings &gt; IP Address.</small>
+              </div>
+
+              <div class="form-group">
+                <label for="hue-user">Hue API Username / App Key</label>
+                <input type="password" id="hue-user" class="form-control" value="sample_hue_api_username" placeholder="Hue Application Key">
+                <small class="field-hint">Press the physical button on your bridge, then click Generate Key below.</small>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group col-half">
+                  <label for="hue-target-type">Target Type</label>
+                  <select id="hue-target-type" class="form-control">
+                    <option value="group">Entertainment Group / Room</option>
+                    <option value="light">Individual Light</option>
+                  </select>
+                </div>
+                <div class="form-group col-half">
+                  <label for="hue-target-id">Target ID</label>
+                  <input type="text" id="hue-target-id" class="form-control" value="1" placeholder="1">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div class="checkbox-toggle">
+                  <input type="checkbox" id="hue-alert-strobe" checked>
+                  <label for="hue-alert-strobe">Use Hue Hardware Alert Strobe (<code>lselect</code> 15-second breathing flash)</label>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button id="btn-save-hue" class="btn btn-primary">Save Hue Settings</button>
+                <button id="btn-test-hue" class="btn btn-secondary">Test Hue Flash</button>
+              </div>
+            </div>
+
+            <div class="hue-guide-col">
+              <h4>Quick Philips Hue Setup Guide</h4>
+              <ol class="guide-steps">
+                <li><strong>Locate Bridge IP:</strong> Open the Philips Hue iOS/Android app &gt; <em>Settings</em> &gt; <em>Bridge Settings</em> &gt; <em>Network settings</em>.</li>
+                <li><strong>Generate App Key:</strong>
+                  <p>Press the big circle button on top of your physical Hue Bridge, then within 30 seconds run:</p>
+                  <pre class="inline-code">curl -X POST http://&lt;BRIDGE_IP&gt;/api -d '{"devicetype":"game_day_lights#mac"}'</pre>
+                </li>
+                <li><strong>Enter Target Group or Light:</strong> Target group <code>1</code> usually controls your first room or entertainment zone.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Webhook Ingestion API -->
+        <div class="tab-panel" id="tab-webhook-studio">
+          <div class="webhook-studio-grid">
+            <div class="webhook-info-col">
+              <h3>Live Score Webhook Ingestion</h3>
+              <p class="panel-desc">Configure your sports score feeds, ESPN webhooks, or custom relays to post events directly to Game Day Lights.</p>
+
+              <div class="endpoint-card">
+                <div class="endpoint-badge">POST</div>
+                <code class="endpoint-url" id="webhook-url-display">http://localhost:3300/api/webhooks/score</code>
+                <button id="btn-copy-webhook-url" class="btn btn-xs btn-outline">Copy</button>
+              </div>
+
+              <div class="endpoint-card">
+                <div class="endpoint-badge">POST (ESPN)</div>
+                <code class="endpoint-url" id="webhook-espn-url-display">http://localhost:3300/api/webhooks/espn</code>
+                <button id="btn-copy-espn-url" class="btn btn-xs btn-outline">Copy</button>
+              </div>
+
+              <h4>Supported Webhook Payload Format</h4>
+              <pre class="code-block"><code>{
+  "team": "canes", // canes | wolfpack | vikings | liverpool
+  "event": "goal", // goal | touchdown | field_goal
+  "player": "Sebastian Aho",
+  "scoreTeam": 4,
+  "scoreOpponent": 2
+}</code></pre>
+            </div>
+
+            <!-- Webhook Interactive Tester -->
+            <div class="webhook-tester-col">
+              <h4>Test Inbound Webhook Payload</h4>
+              <p class="panel-desc">Send a mock inbound webhook directly to the server to test how the score detector responds.</p>
+
+              <div class="form-group">
+                <label for="test-webhook-payload">JSON Payload</label>
+                <textarea id="test-webhook-payload" class="form-control code-textarea" rows="8">{
+  "team": "canes",
+  "event": "GOAL",
+  "player": "Martin Necas",
+  "scoreTeam": 4,
+  "scoreOpponent": 2
+}</textarea>
+              </div>
+
+              <div class="form-actions">
+                <button id="btn-send-test-webhook" class="btn btn-primary">
+                  <span>🚀 Send Inbound Webhook</span>
+                </button>
+                <div class="preset-dropdown-wrap">
+                  <button id="btn-preset-canes" class="btn btn-xs btn-ghost">Canes Goal</button>
+                  <button id="btn-preset-wolfpack" class="btn btn-xs btn-ghost">Wolfpack TD</button>
+                  <button id="btn-preset-vikings" class="btn btn-xs btn-ghost">Vikings TD</button>
+                  <button id="btn-preset-liverpool" class="btn btn-xs btn-ghost">Liverpool Goal</button>
+                </div>
+              </div>
+
+              <div id="test-webhook-result" class="test-result-box hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Live Logs -->
+        <div class="tab-panel" id="tab-live-logs">
+          <div class="logs-header">
+            <h3>Live Telemetry & Activity Feed</h3>
+            <div class="logs-actions">
+              <button id="btn-clear-logs" class="btn btn-xs btn-secondary">Clear View</button>
+            </div>
+          </div>
+          <div class="logs-container" id="logs-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div class="footer-left">
+        Game Day Lights • Supporting Carolina Hurricanes (NHL), NC State Wolfpack (NCAA), Minnesota Vikings (NFL), and Liverpool FC (EPL).
+      </div>
+      <div class="footer-right">
+        <span>Backend: Node.js 24 Native</span> • <span>Connected: Philips Hue & Home Assistant</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
