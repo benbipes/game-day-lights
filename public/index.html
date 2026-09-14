@@ -238,6 +238,28 @@
             <div id="match-date-display" style="color: #fbbf24; font-weight: 500;">Upcoming Game</div>
           </div>
 
+          <!-- Betting Lines & Odds Bar -->
+          <div id="betting-lines-bar" class="betting-lines-bar">
+            <div class="betting-badge-group">
+              <span class="odds-chip" id="odds-spread-chip">
+                <span class="odds-label">SPREAD</span>
+                <strong id="odds-spread-val">--</strong>
+              </span>
+              <span class="odds-chip" id="odds-ou-chip">
+                <span class="odds-label">O/U</span>
+                <strong id="odds-ou-val">--</strong>
+              </span>
+              <span class="odds-chip" id="odds-ml-chip">
+                <span class="odds-label">MONEYLINE</span>
+                <strong id="odds-ml-val">--</strong>
+              </span>
+            </div>
+            <div class="sportsbook-pill" id="odds-book-pill">
+              <span class="book-icon">🎰</span>
+              <span id="odds-provider-name">DraftKings</span>
+            </div>
+          </div>
+
           <div class="scoreboard-main">
             <!-- Home / Selected Team -->
             <div class="scoreboard-side home-side">
@@ -261,6 +283,24 @@
                 <div class="score-team-tag">AWAY</div>
               </div>
               <div class="score-team-logo-wrap opponent-badge" id="score-opponent-badge">🛡️</div>
+            </div>
+          </div>
+
+          <!-- Live In-Game Win Probability Section -->
+          <div id="win-probability-section" class="win-prob-section">
+            <div class="win-prob-header">
+              <div class="win-prob-title">
+                <span class="prob-dot pulse"></span>
+                <span>WIN PROBABILITY</span>
+              </div>
+              <div class="win-prob-split">
+                <span class="team-prob-text" id="team-win-prob-label"><span id="prob-team-name">Team</span> <strong id="team-win-prob-val">50.0%</strong></span>
+                <span class="prob-divider">vs</span>
+                <span class="opp-prob-text" id="opp-win-prob-label"><span id="prob-opp-name">Opponent</span> <strong id="opp-win-prob-val">50.0%</strong></span>
+              </div>
+            </div>
+            <div class="win-prob-bar-track">
+              <div class="win-prob-fill" id="win-prob-fill" style="width: 50%;"></div>
             </div>
           </div>
 

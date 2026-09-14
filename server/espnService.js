@@ -24,6 +24,17 @@ export class EspnService {
         gameDate: null,
         venue: 'TBD',
         broadcast: 'TBD',
+        odds: {
+          provider: 'DraftKings',
+          details: 'TBD',
+          spread: null,
+          overUnder: null,
+          moneyLineHome: null,
+          moneyLineAway: null,
+          formatted: 'Odds TBD'
+        },
+        pregameWinProbability: 50.0,
+        winProbability: 50.0,
         isLive: false,
         source: 'Initializing',
         lastUpdated: new Date().toISOString()
@@ -192,6 +203,70 @@ export class EspnService {
         lastEventText = `Upcoming Matchup: ${event.name} • ${detail}`;
       }
 
+      // 3. Query ESPN game summary to obtain live betting lines and matchup predictor / win probability
+      let summaryData = null;
+      if (team.sportPath && event.id) {
+        try {
+          const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/${team.sportPath}/summary?event=${event.id}`;
+          const sumRes = await fetch(sumUrl, { signal: AbortSignal.timeout(3500) });
+          if (sumRes.ok) {
+            summaryData = await sumRes.json();
+          }
+        } catch (sumErr) {
+          // Fallback to competition data
+        }
+      }
+
+      // Parse Betting Odds (DraftKings / ESPN BET)
+      const pick = summaryData?.pickcenter?.[0] || comp.odds?.[0];
+      const oddsDetails = pick?.details || 'Even';
+      const overUnder = pick?.overUnder !== undefined ? pick.overUnder : null;
+      const spreadVal = pick?.spread !== undefined ? pick.spread : null;
+      const providerName = pick?.provider?.name || 'DraftKings';
+      const mlHome = pick?.homeTeamOdds?.moneyLine || null;
+      const mlAway = pick?.awayTeamOdds?.moneyLine || null;
+
+      // Extract Win Probability
+      let pregameWinProbability = 50.0;
+      if (summaryData?.predictor) {
+        const homeProj = parseFloat(summaryData.predictor.homeTeam?.gameProjection);
+        const awayProj = parseFloat(summaryData.predictor.awayTeam?.gameProjection);
+        if (homeAway === 'home' && !isNaN(homeProj)) {
+          pregameWinProbability = homeProj;
+        } else if (homeAway === 'away' && !isNaN(awayProj)) {
+          pregameWinProbability = awayProj;
+        }
+      } else if (spreadVal !== null) {
+        // Approximate from spread if predictor not present
+        const isFavored = (homeAway === 'home' && spreadVal < 0) || (homeAway === 'away' && spreadVal > 0);
+        const absSpread = Math.abs(spreadVal);
+        const calcP = 1.0 / (1.0 + Math.pow(10, (isFavored ? -absSpread : absSpread) / 14));
+        pregameWinProbability = Math.round(calcP * 1000) / 10;
+      }
+
+      // Current Win Probability
+      let winProbability = pregameWinProbability;
+      if (state === 'post') {
+        winProbability = (rawScoreTeam > rawScoreOpp) ? 100.0 : ((rawScoreTeam < rawScoreOpp) ? 0.0 : 50.0);
+      } else if (isLive) {
+        if (summaryData?.winprobability && summaryData.winprobability.length > 0) {
+          const lastWp = summaryData.winprobability[summaryData.winprobability.length - 1];
+          const homeWp = lastWp.homeWinPercentage;
+          if (typeof homeWp === 'number') {
+            winProbability = homeAway === 'home' ? Math.round(homeWp * 1000) / 10 : Math.round((1 - homeWp) * 1000) / 10;
+          }
+        } else {
+          winProbability = this.calculateLiveWinProbability({
+            scoreTeam: rawScoreTeam,
+            scoreOpponent: rawScoreOpp,
+            sport: team.sport,
+            period,
+            pregameWinProbability,
+            gameState: state
+          });
+        }
+      }
+
       const newMatch = {
         teamId,
         teamName: team.name,
@@ -213,6 +288,17 @@ export class EspnService {
         scoreOpponent: rawScoreOpp ?? 0,
         venue,
         broadcast,
+        odds: {
+          provider: providerName,
+          details: oddsDetails,
+          spread: spreadVal,
+          overUnder,
+          moneyLineHome: mlHome,
+          moneyLineAway: mlAway,
+          formatted: `Spread: ${oddsDetails} • O/U: ${overUnder ?? 'N/A'} • ${providerName}`
+        },
+        pregameWinProbability,
+        winProbability,
         lastEvent: lastEventText,
         isLive,
         source: 'ESPN Live Sports',
@@ -291,6 +377,7 @@ export class EspnService {
     match.gameState = 'in';
     match.isLive = true;
     match.lastEvent = `${eventType.toUpperCase()}: ${player}`;
+    match.winProbability = this.calculateLiveWinProbability(match);
     match.lastUpdated = new Date().toISOString();
 
     const scoreIncreased = match.scoreTeam > prevScore;
@@ -300,6 +387,7 @@ export class EspnService {
       eventType,
       player,
       score: `${match.scoreTeam} - ${match.scoreOpponent}`,
+      winProbability: `${match.winProbability}%`,
       triggeredCelebration: scoreIncreased
     });
 
@@ -351,13 +439,15 @@ export class EspnService {
     match.gameState = 'in';
     match.isLive = true;
     match.lastEvent = `${eventName}: ${player} (+${points} pts)`;
+    match.winProbability = this.calculateLiveWinProbability(match);
     match.lastUpdated = new Date().toISOString();
 
     this.lightService.addLog('Simulator', 'SIMULATED_SCORE', {
       team: match.teamName,
       event: eventName,
       player,
-      newScore: `${match.scoreTeam} - ${match.scoreOpponent}`
+      newScore: `${match.scoreTeam} - ${match.scoreOpponent}`,
+      winProbability: `${match.winProbability}%`
     });
 
     this.lightService.triggerCelebration(teamId, {
@@ -381,12 +471,14 @@ export class EspnService {
     match.gameState = 'in';
     match.isLive = true;
     match.lastEvent = `OPPONENT SCORE (+${points} pts)`;
+    match.winProbability = this.calculateLiveWinProbability(match);
     match.lastUpdated = new Date().toISOString();
 
     this.lightService.addLog('Simulator', 'OPPONENT_SCORE', {
       team: match.teamName,
       opponent: match.opponent,
-      newScore: `${match.scoreTeam} - ${match.scoreOpponent}`
+      newScore: `${match.scoreTeam} - ${match.scoreOpponent}`,
+      winProbability: `${match.winProbability}%`
     });
 
     this.lightService.notifyStateChange({ opponentScored: true, match });
@@ -396,6 +488,7 @@ export class EspnService {
   resetMatch(teamId) {
     const team = TEAMS[teamId];
     if (!team) return null;
+    const prev = this.matches[teamId];
     this.matches[teamId] = {
       teamId,
       teamName: team.name,
@@ -403,8 +496,16 @@ export class EspnService {
       sport: team.sport,
       league: team.league,
       ...JSON.parse(JSON.stringify(team.defaultMatch)),
-      status: 'SCHEDULED',
-      gameState: 'pre',
+      status: prev?.status || 'SCHEDULED',
+      gameState: prev?.gameState || 'pre',
+      gameDate: prev?.gameDate || null,
+      opponent: prev?.opponent || team.defaultMatch.opponent,
+      opponentShort: prev?.opponentShort || team.defaultMatch.opponentShort,
+      venue: prev?.venue || 'TBD',
+      broadcast: prev?.broadcast || 'TBD',
+      odds: prev?.odds || { provider: 'DraftKings', details: 'Even', spread: 0, overUnder: null },
+      pregameWinProbability: prev?.pregameWinProbability || 50.0,
+      winProbability: prev?.pregameWinProbability || 50.0,
       isLive: false,
       lastUpdated: new Date().toISOString()
     };
@@ -412,6 +513,44 @@ export class EspnService {
     this.fetchTeamGame(teamId).catch(() => {});
     this.lightService.setAmbientLighting(teamId);
     return this.matches[teamId];
+  }
+
+  // Dynamic Live Win Probability Calculator
+  calculateLiveWinProbability(match) {
+    if (!match) return 50.0;
+    if (match.gameState === 'post' || match.status === 'FINAL') {
+      if (match.scoreTeam > match.scoreOpponent) return 100.0;
+      if (match.scoreTeam < match.scoreOpponent) return 0.0;
+      return 50.0;
+    }
+
+    const scoreDiff = (match.scoreTeam || 0) - (match.scoreOpponent || 0);
+    const sport = (match.sport || '').toLowerCase();
+    const isFootball = sport.includes('football');
+    const isSoccer = sport.includes('soccer') || sport.includes('epl');
+    const isHockey = sport.includes('hockey');
+
+    let scale = 14.0;
+    if (isSoccer) scale = 2.2;
+    else if (isHockey) scale = 3.0;
+
+    const pregameProb = typeof match.pregameWinProbability === 'number' ? match.pregameWinProbability : 50.0;
+    const clampedP0 = Math.max(0.01, Math.min(0.99, pregameProb / 100.0));
+    const logOdds0 = Math.log(clampedP0 / (1.0 - clampedP0));
+
+    let periodNum = 2;
+    if (typeof match.period === 'string') {
+      const matchPeriod = match.period.match(/\d+/);
+      if (matchPeriod) periodNum = parseInt(matchPeriod[0], 10);
+    }
+    const maxPeriods = isFootball ? 4 : (isHockey ? 3 : 2);
+    const timeProgress = Math.min(1.0, Math.max(0.2, periodNum / maxPeriods));
+
+    const scoreLogOdds = (scoreDiff / scale) * 4.0;
+    const blendedLogOdds = logOdds0 * (1.0 - timeProgress * 0.75) + scoreLogOdds * (0.5 + timeProgress * 0.8);
+
+    const prob = 1.0 / (1.0 + Math.exp(-blendedLogOdds));
+    return Math.round(Math.max(0.1, Math.min(99.9, prob * 100)) * 10) / 10;
   }
 
   getRandomPlayer(teamId) {

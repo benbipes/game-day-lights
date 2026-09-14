@@ -164,6 +164,45 @@ const latestLog = lightService.logs[0];
 assert.ok(latestLog.timestamp && latestLog.source && latestLog.type, 'Log entries have valid telemetry structure');
 console.log(`  ✅ Activity logs recorded ${lightService.logs.length} telemetry events`);
 
+// Test 5: Verify Betting Lines & Dynamic Win Probability Engine
+console.log('▶ Test 5: Betting Lines & Win Probability Tracker');
+const volsMatch = espnService.getMatch('vols');
+assert.ok(volsMatch.odds, 'Vols match has odds object');
+assert.ok(volsMatch.odds.provider, 'Odds includes provider name (e.g. DraftKings)');
+assert.ok(typeof volsMatch.winProbability === 'number', 'Win probability is numeric');
+assert.ok(volsMatch.winProbability >= 0 && volsMatch.winProbability <= 100, 'Win probability is bounded [0, 100]');
+
+// Test dynamic calculation on score swing
+const baseProb = volsMatch.winProbability;
+espnService.simulateScore('vols', { points: 6, event: 'TOUCHDOWN' });
+const probAfterTD = espnService.getMatch('vols').winProbability;
+assert.ok(probAfterTD >= baseProb, 'Touchdown increases or maintains high win probability');
+
+espnService.simulateOpponentScore('vols');
+const probAfterOpp = espnService.getMatch('vols').winProbability;
+assert.ok(probAfterOpp <= probAfterTD, 'Opponent score decreases win probability');
+
+// Test Final Game Probability logic
+const finalMatchWin = espnService.calculateLiveWinProbability({
+  gameState: 'post',
+  scoreTeam: 35,
+  scoreOpponent: 28,
+  sport: 'football'
+});
+assert.strictEqual(finalMatchWin, 100.0, 'Final winning score gives 100% win probability');
+
+const finalMatchLoss = espnService.calculateLiveWinProbability({
+  gameState: 'post',
+  scoreTeam: 21,
+  scoreOpponent: 28,
+  sport: 'football'
+});
+assert.strictEqual(finalMatchLoss, 0.0, 'Final losing score gives 0% win probability');
+
+console.log('  ✅ Betting lines and dynamic win probability calculations verified!');
+
 espnService.stopPolling();
 
 console.log('\n🎉 ALL TESTS PASSED! Game Day Lights core engine is verified and ready.\n');
+process.exit(0);
+

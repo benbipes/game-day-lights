@@ -599,6 +599,19 @@ function initElements() {
     matchLastEvent: document.getElementById('match-last-event'),
     btnSimScoreText: document.getElementById('btn-sim-score-text'),
 
+    // Betting Lines & Odds
+    oddsSpreadVal: document.getElementById('odds-spread-val'),
+    oddsOuVal: document.getElementById('odds-ou-val'),
+    oddsMlVal: document.getElementById('odds-ml-val'),
+    oddsProviderName: document.getElementById('odds-provider-name'),
+
+    // Win Probability Tracker
+    probTeamName: document.getElementById('prob-team-name'),
+    probOppName: document.getElementById('prob-opp-name'),
+    teamWinProbVal: document.getElementById('team-win-prob-val'),
+    oppWinProbVal: document.getElementById('opp-win-prob-val'),
+    winProbFill: document.getElementById('win-prob-fill'),
+
     // Visualizer
     colorRgbDisplay: document.getElementById('color-rgb-display'),
     roomAmbientWash: document.getElementById('room-ambient-wash'),
@@ -1113,6 +1126,42 @@ function renderScoreboard() {
 
   if (elements.matchLastEvent) elements.matchLastEvent.textContent = m.lastEvent || 'Game in progress';
 
+  // Betting Lines & Odds
+  if (elements.oddsSpreadVal) {
+    elements.oddsSpreadVal.textContent = m.odds?.details || '--';
+  }
+  if (elements.oddsOuVal) {
+    elements.oddsOuVal.textContent = m.odds?.overUnder ? `O/U ${m.odds.overUnder}` : '--';
+  }
+  if (elements.oddsMlVal) {
+    let mlText = '--';
+    if (m.homeAway === 'home' && m.odds?.moneyLineHome) {
+      mlText = m.odds.moneyLineHome;
+    } else if (m.homeAway === 'away' && m.odds?.moneyLineAway) {
+      mlText = m.odds.moneyLineAway;
+    } else if (m.odds?.moneyLineHome || m.odds?.moneyLineAway) {
+      mlText = m.odds.moneyLineHome || m.odds.moneyLineAway;
+    }
+    elements.oddsMlVal.textContent = mlText;
+  }
+  if (elements.oddsProviderName) {
+    elements.oddsProviderName.textContent = m.odds?.provider || 'DraftKings';
+  }
+
+  // Win Probability
+  const teamWinProb = typeof m.winProbability === 'number' ? m.winProbability : (m.pregameWinProbability || 50.0);
+  const oppWinProb = Math.round((100 - teamWinProb) * 10) / 10;
+
+  if (elements.probTeamName) elements.probTeamName.textContent = team.short.toUpperCase();
+  if (elements.probOppName) elements.probOppName.textContent = (m.opponentShort || 'OPP').toUpperCase();
+  if (elements.teamWinProbVal) elements.teamWinProbVal.textContent = `${teamWinProb.toFixed(1)}%`;
+  if (elements.oppWinProbVal) elements.oppWinProbVal.textContent = `${oppWinProb.toFixed(1)}%`;
+
+  if (elements.winProbFill) {
+    const clampedWidth = Math.max(2, Math.min(98, teamWinProb));
+    elements.winProbFill.style.width = `${clampedWidth}%`;
+  }
+
   if (elements.screenTeamIcon) elements.screenTeamIcon.textContent = teamIcons[team.id] || '🏆';
   if (elements.screenMatchupText) elements.screenMatchupText.textContent = `${team.short.toUpperCase()} VS ${m.opponentShort || 'OPP'}`;
   if (elements.screenClockText) {
@@ -1537,7 +1586,6 @@ function setupEventListeners() {
   }
 
   // Simulator Controls
-  const btnSimScore = document.getElementById('btn-sim-score');
   if (btnSimScore) {
     btnSimScore.addEventListener('click', async () => {
       const isFootball = state.activeTeam === 'vikings' || state.activeTeam === 'wolfpack' || state.activeTeam === 'vols';
@@ -1555,10 +1603,16 @@ function setupEventListeners() {
           })
         });
         if (!res.ok) throw new Error('API unavailable');
+        const data = await res.json();
+        if (data.match) {
+          state.match = data.match;
+          renderScoreboard();
+        }
       } catch (err) {
         if (state.match) {
           state.match.scoreTeam = (state.match.scoreTeam || 0) + pts;
           state.match.lastEvent = `${evtName} scored (+${pts} pts)`;
+          state.match.winProbability = calculateClientWinProb(state.match, state.teams[state.activeTeam]);
           renderScoreboard();
         }
         runLocalCelebration(state.activeTeam, evtName);
@@ -1580,10 +1634,16 @@ function setupEventListeners() {
           })
         });
         if (!res.ok) throw new Error('API unavailable');
+        const data = await res.json();
+        if (data.match) {
+          state.match = data.match;
+          renderScoreboard();
+        }
       } catch (err) {
         if (state.match) {
           state.match.scoreTeam = (state.match.scoreTeam || 0) + 6;
           state.match.lastEvent = `TOUCHDOWN scored (+6 pts)`;
+          state.match.winProbability = calculateClientWinProb(state.match, state.teams[state.activeTeam]);
           renderScoreboard();
         }
         runLocalCelebration(state.activeTeam, 'TOUCHDOWN');
@@ -1601,10 +1661,16 @@ function setupEventListeners() {
           body: JSON.stringify({ teamId: state.activeTeam })
         });
         if (!res.ok) throw new Error('API unavailable');
+        const data = await res.json();
+        if (data.match) {
+          state.match = data.match;
+          renderScoreboard();
+        }
       } catch (err) {
         if (state.match) {
           state.match.scoreOpponent = (state.match.scoreOpponent || 0) + 1;
           state.match.lastEvent = `OPPONENT SCORE (+1 pt)`;
+          state.match.winProbability = calculateClientWinProb(state.match, state.teams[state.activeTeam]);
           renderScoreboard();
         }
       }
@@ -1621,10 +1687,16 @@ function setupEventListeners() {
           body: JSON.stringify({ teamId: state.activeTeam })
         });
         if (!res.ok) throw new Error('API unavailable');
+        const data = await res.json();
+        if (data.match) {
+          state.match = data.match;
+          renderScoreboard();
+        }
       } catch (err) {
         const team = state.teams[state.activeTeam];
         if (team) {
           state.match = JSON.parse(JSON.stringify(team.defaultMatch));
+          state.match.winProbability = state.match.pregameWinProbability || 50.0;
           renderScoreboard();
           runLocalAmbient(state.activeTeam);
         }
@@ -2129,6 +2201,43 @@ async function loadTeams() {
   }
 }
 
+// Calculate live win probability client-side
+function calculateClientWinProb(match, team) {
+  if (!match) return 50.0;
+  if (match.gameState === 'post' || match.status === 'FINAL') {
+    if (match.scoreTeam > match.scoreOpponent) return 100.0;
+    if (match.scoreTeam < match.scoreOpponent) return 0.0;
+    return 50.0;
+  }
+  const scoreDiff = (match.scoreTeam || 0) - (match.scoreOpponent || 0);
+  const sport = (team?.sport || match.sport || '').toLowerCase();
+  const isFootball = sport.includes('football');
+  const isSoccer = sport.includes('soccer') || sport.includes('epl');
+  const isHockey = sport.includes('hockey');
+
+  let scale = 14.0;
+  if (isSoccer) scale = 2.2;
+  else if (isHockey) scale = 3.0;
+
+  const pregameProb = typeof match.pregameWinProbability === 'number' ? match.pregameWinProbability : 50.0;
+  const clampedP0 = Math.max(0.01, Math.min(0.99, pregameProb / 100.0));
+  const logOdds0 = Math.log(clampedP0 / (1.0 - clampedP0));
+
+  let periodNum = 2;
+  if (typeof match.period === 'string') {
+    const matchPeriod = match.period.match(/\d+/);
+    if (matchPeriod) periodNum = parseInt(matchPeriod[0], 10);
+  }
+  const maxPeriods = isFootball ? 4 : (isHockey ? 3 : 2);
+  const timeProgress = Math.min(1.0, Math.max(0.2, periodNum / maxPeriods));
+
+  const scoreLogOdds = (scoreDiff / scale) * 4.0;
+  const blendedLogOdds = logOdds0 * (1.0 - timeProgress * 0.75) + scoreLogOdds * (0.5 + timeProgress * 0.8);
+
+  const prob = 1.0 / (1.0 + Math.exp(-blendedLogOdds));
+  return Math.round(Math.max(0.1, Math.min(99.9, prob * 100)) * 10) / 10;
+}
+
 // Client-side ESPN parser for GitHub Pages or remote standalone operation
 async function fetchEspnDirectForTeam(teamId) {
   const team = state.teams[teamId];
@@ -2201,6 +2310,63 @@ async function fetchEspnDirectForTeam(teamId) {
       lastEventText = `Upcoming Matchup: ${event.name} • ${detail}`;
     }
 
+    // Query ESPN summary for live betting lines and predictor
+    let summaryData = null;
+    if (team.sportPath && event.id) {
+      try {
+        const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/${team.sportPath}/summary?event=${event.id}`;
+        const sumRes = await fetch(sumUrl);
+        if (sumRes.ok) summaryData = await sumRes.json();
+      } catch (sumErr) {}
+    }
+
+    // Odds
+    const pick = summaryData?.pickcenter?.[0] || comp.odds?.[0];
+    const oddsDetails = pick?.details || 'Even';
+    const overUnder = pick?.overUnder !== undefined ? pick.overUnder : null;
+    const spreadVal = pick?.spread !== undefined ? pick.spread : null;
+    const providerName = pick?.provider?.name || 'DraftKings';
+    const mlHome = pick?.homeTeamOdds?.moneyLine || null;
+    const mlAway = pick?.awayTeamOdds?.moneyLine || null;
+
+    // Win Probability
+    let pregameWinProbability = 50.0;
+    if (summaryData?.predictor) {
+      const homeProj = parseFloat(summaryData.predictor.homeTeam?.gameProjection);
+      const awayProj = parseFloat(summaryData.predictor.awayTeam?.gameProjection);
+      if (homeAway === 'home' && !isNaN(homeProj)) {
+        pregameWinProbability = homeProj;
+      } else if (homeAway === 'away' && !isNaN(awayProj)) {
+        pregameWinProbability = awayProj;
+      }
+    } else if (spreadVal !== null) {
+      const isFavored = (homeAway === 'home' && spreadVal < 0) || (homeAway === 'away' && spreadVal > 0);
+      const absSpread = Math.abs(spreadVal);
+      const calcP = 1.0 / (1.0 + Math.pow(10, (isFavored ? -absSpread : absSpread) / 14));
+      pregameWinProbability = Math.round(calcP * 1000) / 10;
+    }
+
+    let winProbability = pregameWinProbability;
+    if (compState === 'post') {
+      winProbability = (rawScoreTeam > rawScoreOpp) ? 100.0 : ((rawScoreTeam < rawScoreOpp) ? 0.0 : 50.0);
+    } else if (isLive) {
+      if (summaryData?.winprobability && summaryData.winprobability.length > 0) {
+        const lastWp = summaryData.winprobability[summaryData.winprobability.length - 1];
+        const homeWp = lastWp.homeWinPercentage;
+        if (typeof homeWp === 'number') {
+          winProbability = homeAway === 'home' ? Math.round(homeWp * 1000) / 10 : Math.round((1 - homeWp) * 1000) / 10;
+        }
+      } else {
+        winProbability = calculateClientWinProb({
+          scoreTeam: rawScoreTeam,
+          scoreOpponent: rawScoreOpp,
+          period,
+          pregameWinProbability,
+          gameState: compState
+        }, team);
+      }
+    }
+
     const matchObj = {
       teamId,
       teamName: team.name,
@@ -2222,6 +2388,17 @@ async function fetchEspnDirectForTeam(teamId) {
       scoreOpponent: rawScoreOpp ?? 0,
       venue,
       broadcast,
+      odds: {
+        provider: providerName,
+        details: oddsDetails,
+        spread: spreadVal,
+        overUnder,
+        moneyLineHome: mlHome,
+        moneyLineAway: mlAway,
+        formatted: `Spread: ${oddsDetails} • O/U: ${overUnder ?? 'N/A'} • ${providerName}`
+      },
+      pregameWinProbability,
+      winProbability,
       lastEvent: lastEventText,
       isLive,
       source: 'ESPN Live Sports',
