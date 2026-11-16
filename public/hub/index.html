@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=http://192.168.86.85:3080">
+  <title>Redirecting to Family Kitchen Hub...</title>
+  <script>
+    const defaultTarget = "http://192.168.86.85:3080";
+    const params = new URLSearchParams(window.location.search);
+    const target = params.get("url") || defaultTarget;
+    window.location.replace(target);
+  </script>
+</head>
+<body style="background-color: #0B0F19; color: #F8FAFC; font-family: -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+  <div style="text-align: center;">
+    <h2>🍳 Redirecting to Family Kitchen Hub...</h2>
+    <p style="color: #94A3B8;">Opening <code id="dest">http://192.168.86.85:3080</code>...</p>
+    <p><a id="link" href="http://192.168.86.85:3080" style="color: #38BDF8; font-size: 1.2rem; font-weight: bold;">Tap here if not redirected</a></p>
+  </div>
+  <script>
+    document.getElementById("dest").textContent = target;
+    document.getElementById("link").href = target;
+  </script>
+</body>
+</html>
